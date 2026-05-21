@@ -72,4 +72,3 @@ class _AppShellState extends State<AppShell> {
     );
   }
 }
-

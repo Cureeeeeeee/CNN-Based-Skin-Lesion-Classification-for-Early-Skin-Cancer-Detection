@@ -1,0 +1,22 @@
+[
+  {
+    "case": "easy_correct",
+    "json": "docs\\demo\\prediction_easy_correct.json",
+    "image": "docs\\demo\\images\\easy_correct_ISIC_0024308.jpg"
+  },
+  {
+    "case": "top3_recovery",
+    "json": "docs\\demo\\prediction_top3_recovery.json",
+    "image": "docs\\demo\\images\\top3_recovery_ISIC_0024329.jpg"
+  },
+  {
+    "case": "difficult_uncertain",
+    "json": "docs\\demo\\prediction_difficult_uncertain.json",
+    "image": "docs\\demo\\images\\difficult_uncertain_ISIC_0024439.jpg"
+  },
+  {
+    "case": "weak_class_mel",
+    "json": "docs\\demo\\prediction_weak_class_mel.json",
+    "image": "docs\\demo\\images\\weak_class_mel_ISIC_0024351.jpg"
+  }
+]

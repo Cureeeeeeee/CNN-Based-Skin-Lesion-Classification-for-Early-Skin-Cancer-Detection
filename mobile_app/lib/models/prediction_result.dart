@@ -32,7 +32,8 @@ class PredictionResult {
 
   factory PredictionResult.fromJson(Map<String, dynamic> json) {
     final candidates = (json['top_candidates'] as List<dynamic>)
-        .map((item) => PredictionCandidate.fromJson(item as Map<String, dynamic>))
+        .map((item) =>
+            PredictionCandidate.fromJson(item as Map<String, dynamic>))
         .toList();
 
     return PredictionResult(
@@ -44,4 +45,3 @@ class PredictionResult {
     );
   }
 }
-

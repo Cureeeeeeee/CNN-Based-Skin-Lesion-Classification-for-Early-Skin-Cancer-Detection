@@ -10,7 +10,7 @@ predicted class, confidence score, and top candidates.
 ```mermaid
 flowchart LR
     A["Flutter mobile app<br/>Camera or gallery input"] -->|Image upload| B["FastAPI backend<br/>/predict"]
-    B --> C["ResNet50 classifier<br/>runs/resnet50/best.pt"]
+    B -->|"Image preprocessing + inference"| C["ResNet50 classifier<br/>runs/resnet50/best.pt"]
     C -->|Prediction JSON| D["Result screen<br/>Top 3 classes + confidence"]
     D --> A
 ```

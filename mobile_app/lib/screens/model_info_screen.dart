@@ -21,11 +21,13 @@ class ModelInfoScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Current Model', style: Theme.of(context).textTheme.titleLarge),
+                Text('Current Model',
+                    style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
                 const Text('ResNet50'),
                 const SizedBox(height: 4),
-                const Text('Selected by highest test accuracy and macro F1-score.'),
+                const Text(
+                    'Selected by highest test accuracy and macro F1-score.'),
               ],
             ),
           ),
@@ -61,7 +63,8 @@ class ModelInfoScreen extends StatelessWidget {
         const Card(
           child: Padding(
             padding: EdgeInsets.all(16),
-            child: Text('Research prototype only. It is not a medical diagnosis tool.'),
+            child: Text(
+                'This result is for educational demonstration only and is not a medical diagnosis.'),
           ),
         ),
       ],

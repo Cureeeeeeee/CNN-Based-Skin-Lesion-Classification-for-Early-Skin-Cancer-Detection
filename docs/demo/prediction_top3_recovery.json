@@ -1,0 +1,31 @@
+{
+  "sample": {
+    "image_id": "ISIC_0024329",
+    "true_label": "akiec",
+    "split": "test",
+    "source_image_path": "data\\processed\\images\\ISIC-images\\ISIC_0024329.jpg",
+    "demo_image_path": "docs\\demo\\images\\top3_recovery_ISIC_0024329.jpg"
+  },
+  "prediction": {
+    "model": "resnet50",
+    "checkpoint": "runs/resnet50/best.pt",
+    "predicted_class": "bcc",
+    "confidence": 0.783704,
+    "top_candidates": [
+      {
+        "class": "bcc",
+        "confidence": 0.783704
+      },
+      {
+        "class": "akiec",
+        "confidence": 0.175067
+      },
+      {
+        "class": "bkl",
+        "confidence": 0.022195
+      }
+    ],
+    "top1_correct": false,
+    "true_label_in_top3": true
+  }
+}

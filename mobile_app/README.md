@@ -3,13 +3,14 @@
 Flutter prototype for the skin lesion analysis system. The app uploads a camera
 or gallery image to the FastAPI backend and displays the predicted lesion class,
 confidence score, and top candidates.
+It also includes a mock prediction mode for presentation safety when the backend
+is not reachable.
 
 ## Run
 
 Install Flutter, then run:
 
 ```bash
-flutter create . --platforms android,ios
 flutter pub get
 flutter run
 ```
@@ -25,3 +26,22 @@ Default API URL:
 - Android emulator: `http://10.0.2.2:8000`
 - Real phone: replace it with the computer's LAN IP, for example
   `http://192.168.1.20:8000`
+
+If building web from the current OneDrive path with Chinese characters, use:
+
+```bash
+flutter build web --no-tree-shake-icons
+```
+
+## Validation
+
+Validated locally:
+
+- `flutter pub get`: passed
+- `dart analyze lib test`: passed
+- `flutter test`: passed
+- `flutter build web --no-tree-shake-icons`: passed
+
+`flutter analyze` currently crashes in this Windows environment due to a Flutter
+3.44 analysis-server/tool issue, so `dart analyze lib test` is used as the
+code-level analyzer check.

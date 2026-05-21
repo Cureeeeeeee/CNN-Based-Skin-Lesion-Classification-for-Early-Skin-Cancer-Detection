@@ -11,8 +11,8 @@ import numpy as np
 MODEL_LABELS = {
     "mobilenetv3_small_100": "MobileNetV3 Small",
     "efficientnet_b0": "EfficientNet-B0",
-    "resnet50": "ResNet50",
     "densenet121": "DenseNet121",
+    "resnet50": "ResNet50",
 }
 
 
@@ -126,7 +126,7 @@ def plot_confusion_matrix(metrics: dict[str, object], model_label: str, output_p
     fig, axes = plt.subplots(1, 2, figsize=(15, 6))
     for axis, values, title, fmt in [
         (axes[0], matrix, "Counts", "d"),
-        (axes[1], normalized, "Row-normalized", ".2f"),
+        (axes[1], normalized, "Per-class recall", ".0%"),
     ]:
         image = axis.imshow(values, cmap="Blues", interpolation="nearest")
         fig.colorbar(image, ax=axis, fraction=0.046, pad=0.04)
@@ -141,10 +141,11 @@ def plot_confusion_matrix(metrics: dict[str, object], model_label: str, output_p
         for row_index in range(values.shape[0]):
             for column_index in range(values.shape[1]):
                 cell_value = values[row_index, column_index]
+                cell_text = f"{cell_value * 100:.0f}%" if fmt == ".0%" else format(cell_value, fmt)
                 axis.text(
                     column_index,
                     row_index,
-                    format(cell_value, fmt),
+                    cell_text,
                     ha="center",
                     va="center",
                     fontsize=8,
@@ -175,7 +176,7 @@ def plot_mobile_architecture(output_path: Path) -> None:
 
     arrows = [
         ((0.30, 0.64), (0.37, 0.64), "image upload", (0.335, 0.78)),
-        ((0.59, 0.64), (0.66, 0.64), "tensor inference", (0.625, 0.78)),
+        ((0.59, 0.64), (0.66, 0.64), "image preprocessing + inference", (0.625, 0.78)),
         ((0.77, 0.55), (0.48, 0.36), "prediction JSON", (0.63, 0.48)),
         ((0.37, 0.27), (0.19, 0.55), "display result", (0.29, 0.39)),
     ]
@@ -196,7 +197,7 @@ def plot_mobile_architecture(output_path: Path) -> None:
     axis.text(
         0.5,
         0.06,
-        "Future extension: Grad-CAM heatmaps, YOLO lesion localization, and diagnostic-style report generation.",
+        "Future extension: Grad-CAM heatmaps, YOLO lesion localisation, and diagnostic-style report generation.",
         ha="center",
         va="center",
         fontsize=11,

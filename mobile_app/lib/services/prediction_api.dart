@@ -19,16 +19,19 @@ class PredictionApi {
   }
 
   Future<PredictionResult> predict(File imageFile) async {
-    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/predict'));
-    request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+    final request =
+        http.MultipartRequest('POST', Uri.parse('$baseUrl/predict'));
+    request.files
+        .add(await http.MultipartFile.fromPath('image', imageFile.path));
 
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
     if (response.statusCode != 200) {
-      throw Exception('Prediction failed: ${response.statusCode} ${response.body}');
+      throw Exception(
+          'Prediction failed: ${response.statusCode} ${response.body}');
     }
 
-    return PredictionResult.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return PredictionResult.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>);
   }
 }
-

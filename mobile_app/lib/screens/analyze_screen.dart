@@ -15,10 +15,12 @@ class AnalyzeScreen extends StatefulWidget {
 
 class _AnalyzeScreenState extends State<AnalyzeScreen> {
   final _picker = ImagePicker();
-  final _baseUrlController = TextEditingController(text: 'http://10.0.2.2:8000');
+  final _baseUrlController =
+      TextEditingController(text: 'http://10.0.2.2:8000');
   File? _selectedImage;
   PredictionResult? _result;
   bool _isLoading = false;
+  bool _mockMode = false;
   String? _error;
 
   @override
@@ -48,8 +50,10 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
     });
 
     try {
-      final api = PredictionApi(baseUrl: _baseUrlController.text.trim());
-      final result = await api.predict(image);
+      final result = _mockMode
+          ? _mockPrediction()
+          : await PredictionApi(baseUrl: _baseUrlController.text.trim())
+              .predict(image);
       setState(() => _result = result);
     } catch (error) {
       setState(() => _error = error.toString());
@@ -60,6 +64,21 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
     }
   }
 
+  PredictionResult _mockPrediction() {
+    return const PredictionResult(
+      model: 'resnet50 mock',
+      predictedClass: 'nv',
+      confidence: 0.9128,
+      topCandidates: [
+        PredictionCandidate(className: 'nv', confidence: 0.9128),
+        PredictionCandidate(className: 'mel', confidence: 0.0858),
+        PredictionCandidate(className: 'bkl', confidence: 0.0013),
+      ],
+      disclaimer:
+          'This result is for educational demonstration only and is not a medical diagnosis.',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -67,11 +86,25 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
       children: [
         TextField(
           controller: _baseUrlController,
+          enabled: !_mockMode,
           decoration: const InputDecoration(
             labelText: 'Backend URL',
             prefixIcon: Icon(Icons.cloud_outlined),
             border: OutlineInputBorder(),
           ),
+        ),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Mock prediction mode'),
+          subtitle: const Text(
+              'Use this if the backend is unavailable during a live demo.'),
+          value: _mockMode,
+          onChanged: (value) => setState(() {
+            _mockMode = value;
+            _result = null;
+            _error = null;
+          }),
         ),
         const SizedBox(height: 16),
         AspectRatio(
@@ -164,7 +197,8 @@ class _ResultPanel extends StatelessWidget {
             const SizedBox(height: 12),
             Text('Model: ${result.model}'),
             const SizedBox(height: 16),
-            for (final candidate in result.topCandidates) _CandidateBar(candidate: candidate),
+            for (final candidate in result.topCandidates)
+              _CandidateBar(candidate: candidate),
             const SizedBox(height: 12),
             Text(
               result.disclaimer,

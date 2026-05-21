@@ -1,182 +1,240 @@
-# AI Skin Lesion Analysis
+# CNN-Based Skin Lesion Classification for Early Skin Cancer Detection
 
-This project builds a staged AI-assisted skin lesion analysis system.
+This repository contains a delivery-ready prototype for AI-assisted multiclass
+skin lesion classification. Stage 1 compares transfer-learning CNN models on a
+HAM10000 / ISIC-derived dataset and exposes the best model through a FastAPI
+backend for a Flutter mobile prototype.
 
-Stage 1 focuses on multiclass image classification for HAM10000 using transfer
-learning CNN models. The first supported model family includes MobileNet,
-ResNet, EfficientNet, and DenseNet. Later stages can add YOLO lesion
-localization and diagnostic-style report generation.
+The project is for educational demonstration and research support only. It is
+not a medical diagnosis system.
 
-## Current status
+## Current Results
 
-The repository currently contains the Stage 1 starter implementation:
+| Model | Test Accuracy | Macro F1 | Role |
+| --- | ---: | ---: | --- |
+| MobileNetV3 Small | 67.76% | 57.26% | Lightweight baseline |
+| EfficientNet-B0 | 77.45% | 64.77% | Efficient baseline |
+| DenseNet121 | 79.64% | 68.96% | Strong comparison baseline |
+| ResNet50 | 80.22% | 69.03% | Default deployment model |
 
-- HAM10000 split preparation with leakage reduction by `lesion_id`
-- PyTorch dataset and training pipeline
-- Transfer learning model factory using `timm`
-- Evaluation metrics: accuracy, precision, recall, F1-score, confusion matrix
-- FastAPI prediction endpoint for future Flutter integration
-- Initial experiment result template
+ResNet50 remains the default model because it achieved the best initial test
+accuracy and macro F1-score. DenseNet121 is retained as a strong comparison
+model because its performance is very close to ResNet50.
 
-No experiment has been run yet, so all reported results must remain marked as
-pending until training is completed.
-
-## Project structure
+## Project Structure
 
 ```text
-configs/
-  ham10000.yaml                 # Main experiment configuration
+configs/                         Training and data configuration
 docs/
-  initial_experiment_results.md # Report-ready initial results template
-src/
-  skinlesion/
-    data.py                     # Dataset loading and transforms
-    models.py                   # CNN model factory
-    train.py                    # Training and validation loop
-    evaluate.py                 # Test metrics and confusion matrix
-    prepare_ham10000.py         # Metadata split generation
-    api.py                      # FastAPI prediction API
+  demo/                           Stable demo images and saved predictions
+  figures/                        Curves, model comparison, confusion matrices
+  initial_experiment_results.md   Result summary for reports
+  mobile_app_architecture.md      Mobile/backend workflow diagram
+  validation.md                   Latest validation notes
+mobile_app/                       Flutter prototype
+notebooks/                        Clean notebook for demo/submission
+src/skinlesion/                   Data, training, evaluation, API, demos
 ```
+
+Large local artifacts are intentionally not committed:
+
+- `data/raw/`
+- `data/processed/`
+- `runs/`
+- `.venv/`
 
 ## Environment
 
-Python is required, preferably Python 3.10 or 3.11.
-
-Install dependencies:
+Use Python 3.10 or 3.11. Install PyTorch separately with the correct CPU/CUDA
+build for your machine, then install the remaining dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Install PyTorch separately before the remaining dependencies. Choose the
-matching Windows/CUDA command from the official PyTorch website. This avoids
-accidentally replacing a working GPU build with an older pinned package.
+The current local experiment environment used CUDA-enabled PyTorch on an NVIDIA
+GPU. See `docs/requirements_actual.txt` for a full local package snapshot.
 
-## Dataset preparation
+## Dataset Preparation
 
-Download HAM10000 images and metadata from the ISIC Archive, then arrange them
-locally. A typical layout is:
+Expected local layout:
 
 ```text
 data/
   raw/
-    HAM10000_metadata.csv
-    images/
-      ISIC_0024306.jpg
-      ISIC_0024307.jpg
-      ...
+    ham10000_metadata_2026-04-02.csv
+    ISIC-images.zip
 ```
 
-Create train/validation/test splits:
+Prepare grouped train/validation/test splits:
 
 ```bash
 python -m src.skinlesion.prepare_ham10000 \
-  --metadata data/raw/ISIC-metadata.csv \
+  --metadata data/raw/ham10000_metadata_2026-04-02.csv \
   --image-zip data/raw/ISIC-images.zip \
   --output data/processed/splits.csv
 ```
 
-The split target is 70% training, 15% validation, and 15% testing. The script
-uses `lesion_id` as a grouping column when available to reduce duplicate-lesion
-data leakage.
+The split uses `lesion_id` where available to reduce duplicate-lesion leakage.
 
-## Training
+## Notebook
 
-Train one architecture:
+Open the clean delivery notebook:
 
-```bash
-python -m src.skinlesion.train --config configs/ham10000.yaml --model mobilenetv3_small_100
+```text
+notebooks/skin_lesion_delivery_demo.ipynb
 ```
 
-Run a quick smoke test before full training:
+The notebook uses relative paths and can be opened in local Jupyter or adapted
+for Google Colab. It includes dataset loading, preprocessing, model setup,
+metric tables, figures, confusion matrices, top-3 demo outputs, and the
+ResNet50 deployment conclusion.
+
+## Training and Evaluation
+
+Train a model:
 
 ```bash
-python -m src.skinlesion.train \
-  --config configs/ham10000.yaml \
-  --model mobilenetv3_small_100 \
-  --epochs 1 \
-  --limit-batches 2 \
-  --no-pretrained
+python -m src.skinlesion.train --config configs/ham10000.yaml --model resnet50
 ```
 
-Train all configured architectures:
-
-```bash
-python -m src.skinlesion.train --config configs/ham10000.yaml --all-models
-```
-
-Outputs are written to `runs/<model_name>/` by default.
-
-## Evaluation
-
-Evaluate a checkpoint on the held-out test split:
+Evaluate the best checkpoint:
 
 ```bash
 python -m src.skinlesion.evaluate \
   --config configs/ham10000.yaml \
-  --model mobilenetv3_small_100 \
-  --checkpoint runs/mobilenetv3_small_100/best.pt
+  --model resnet50 \
+  --checkpoint runs/resnet50/best.pt \
+  --split test
 ```
 
-The evaluation script writes metrics and a confusion matrix to the model run
-folder.
-
-## Report assets
-
-Generate training curves, model comparison charts, confusion matrix summaries,
-and the mobile architecture diagram:
+Regenerate report assets:
 
 ```bash
 python -m src.skinlesion.report_assets --runs-dir runs --output-dir docs/figures
 ```
 
-Important generated figures:
+Key figures:
 
-- `docs/figures/training_curves.png`
 - `docs/figures/model_comparison.png`
+- `docs/figures/training_curves.png`
 - `docs/figures/resnet50_confusion_matrix_summary.png`
 - `docs/figures/densenet121_confusion_matrix_summary.png`
 - `docs/figures/mobile_app_architecture.png`
 
-## Prediction demo
+## FastAPI Backend
 
-Run a top-3 prediction demo with the default ResNet50 checkpoint:
+The backend defaults to:
 
-```bash
-python -m src.skinlesion.predict_demo \
-  --checkpoint runs/resnet50/best.pt \
-  --model resnet50 \
-  --sample-split test \
-  --sample-label vasc \
-  --top-k 3 \
-  --output docs/demo/prediction_demo_resnet50_vasc.json
+```text
+runs/resnet50/best.pt
 ```
 
-## API prototype
-
-Start the local API after a trained checkpoint exists. The default checkpoint is
-`runs/resnet50/best.pt`.
+Start the API:
 
 ```bash
 uvicorn src.skinlesion.api:app --host 0.0.0.0 --port 8000
 ```
 
-Prediction endpoint:
+Test health:
 
-```text
-POST /predict
-multipart/form-data image=<file>
+```bash
+curl http://127.0.0.1:8000/health
 ```
 
-The response contains the predicted lesion class, confidence score, and top
-candidate classes. This is the interface the future Flutter mobile app can call.
+Test model info:
 
-## Mobile prototype
+```bash
+curl http://127.0.0.1:8000/model-info
+```
 
-The Flutter prototype is in `mobile_app/`. It supports camera/gallery image
-selection, backend upload, top-3 result display, and a model comparison screen.
+Test prediction:
 
-## Medical disclaimer
+```bash
+curl -X POST http://127.0.0.1:8000/predict \
+  -F "image=@docs/demo/images/easy_correct_ISIC_0024308.jpg"
+```
 
-This project is for academic and research purposes only. It is not a medical
-device and must not be used as a final diagnosis system.
+`POST /predict` returns clean JSON with:
+
+- selected model
+- predicted class
+- confidence score
+- top-3 candidates
+- educational-use disclaimer
+
+The API includes error handling for empty uploads, invalid image files, missing
+checkpoints, model loading failures, and unexpected inference errors.
+
+## Stable Demo Set
+
+Stable demo assets are in `docs/demo/`.
+
+Regenerate them:
+
+```bash
+python -m src.skinlesion.prepare_demo_set \
+  --checkpoint runs/resnet50/best.pt \
+  --model resnet50 \
+  --split-csv data/processed/splits.csv \
+  --output-dir docs/demo
+```
+
+The demo set includes:
+
+- an easy correct top-1 prediction
+- a top-3 recovery example
+- a difficult/uncertain example
+- a melanoma weak-class example
+
+These files are intended to prevent live demo failure during a presentation.
+
+## Flutter Prototype
+
+The Flutter prototype is in `mobile_app/`. It supports:
+
+- camera/gallery image selection
+- selected image preview
+- configurable API base URL
+- FastAPI `/predict` connection
+- loading and error states
+- top-3 prediction display
+- confidence bars
+- model comparison screen
+- mock prediction mode for presentation safety
+
+Run:
+
+```bash
+cd mobile_app
+flutter pub get
+flutter run
+```
+
+For Android emulator use:
+
+```text
+http://10.0.2.2:8000
+```
+
+For a real phone, use the computer's LAN IP, for example:
+
+```text
+http://192.168.1.20:8000
+```
+
+If building web from this OneDrive path with Chinese characters, use:
+
+```bash
+flutter build web --no-tree-shake-icons
+```
+
+## Known Limitations
+
+- The model is trained for academic demonstration, not clinical diagnosis.
+- Minority classes remain harder, especially melanoma-related confusion with
+  nevus and benign keratosis.
+- No Grad-CAM heatmap is included yet.
+- YOLO lesion localisation is planned as a later stage.
+- Flutter Android deployment requires Android SDK configuration on the host
+  machine.

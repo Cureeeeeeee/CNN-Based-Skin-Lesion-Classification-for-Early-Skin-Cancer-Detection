@@ -1,17 +1,22 @@
-# Prediction Demo
+# Prediction Demo Set
 
-This folder stores lightweight prediction demo outputs. The original dataset
-images are not committed to GitHub; demo JSON files reference local image paths
-under `data/processed/`.
+This folder stores a stable ResNet50 prediction demo set for presentations. The
+selected images are copied into `docs/demo/images/` so the demo does not depend
+on live access to the full raw dataset.
 
-Run a ResNet50 top-3 prediction demo:
+Included cases:
+
+- `easy_correct`: top-1 prediction is correct with high confidence.
+- `top3_recovery`: top-1 prediction is wrong, but the true class appears in top 3.
+- `difficult_uncertain`: uncertain or difficult example showing model limitation.
+- `weak_class_mel`: melanoma-related weak-class example for discussion.
+
+Regenerate the demo set:
 
 ```bash
-python -m src.skinlesion.predict_demo \
+python -m src.skinlesion.prepare_demo_set \
   --checkpoint runs/resnet50/best.pt \
   --model resnet50 \
-  --sample-split test \
-  --sample-label mel \
-  --top-k 3 \
-  --output docs/demo/prediction_demo_resnet50.json
+  --split-csv data/processed/splits.csv \
+  --output-dir docs/demo
 ```
