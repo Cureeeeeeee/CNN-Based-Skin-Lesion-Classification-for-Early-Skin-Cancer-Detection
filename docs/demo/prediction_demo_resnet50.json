@@ -1,0 +1,29 @@
+{
+  "sample": {
+    "source": "split_csv",
+    "image_id": "ISIC_0024351",
+    "true_label": "mel",
+    "split": "test",
+    "image_path": "data\\processed\\images\\ISIC-images\\ISIC_0024351.jpg"
+  },
+  "prediction": {
+    "model": "resnet50",
+    "checkpoint": "runs\\resnet50\\best.pt",
+    "predicted_class": "nv",
+    "confidence": 0.799071,
+    "top_candidates": [
+      {
+        "class": "nv",
+        "confidence": 0.799071
+      },
+      {
+        "class": "mel",
+        "confidence": 0.104659
+      },
+      {
+        "class": "bkl",
+        "confidence": 0.095336
+      }
+    ]
+  }
+}

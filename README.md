@@ -121,12 +121,44 @@ python -m src.skinlesion.evaluate \
 The evaluation script writes metrics and a confusion matrix to the model run
 folder.
 
-## API prototype
+## Report assets
 
-Start the local API after a trained checkpoint exists:
+Generate training curves, model comparison charts, confusion matrix summaries,
+and the mobile architecture diagram:
 
 ```bash
-uvicorn src.skinlesion.api:app --reload
+python -m src.skinlesion.report_assets --runs-dir runs --output-dir docs/figures
+```
+
+Important generated figures:
+
+- `docs/figures/training_curves.png`
+- `docs/figures/model_comparison.png`
+- `docs/figures/resnet50_confusion_matrix_summary.png`
+- `docs/figures/densenet121_confusion_matrix_summary.png`
+- `docs/figures/mobile_app_architecture.png`
+
+## Prediction demo
+
+Run a top-3 prediction demo with the default ResNet50 checkpoint:
+
+```bash
+python -m src.skinlesion.predict_demo \
+  --checkpoint runs/resnet50/best.pt \
+  --model resnet50 \
+  --sample-split test \
+  --sample-label vasc \
+  --top-k 3 \
+  --output docs/demo/prediction_demo_resnet50_vasc.json
+```
+
+## API prototype
+
+Start the local API after a trained checkpoint exists. The default checkpoint is
+`runs/resnet50/best.pt`.
+
+```bash
+uvicorn src.skinlesion.api:app --host 0.0.0.0 --port 8000
 ```
 
 Prediction endpoint:
@@ -138,6 +170,11 @@ multipart/form-data image=<file>
 
 The response contains the predicted lesion class, confidence score, and top
 candidate classes. This is the interface the future Flutter mobile app can call.
+
+## Mobile prototype
+
+The Flutter prototype is in `mobile_app/`. It supports camera/gallery image
+selection, backend upload, top-3 result display, and a model comparison screen.
 
 ## Medical disclaimer
 

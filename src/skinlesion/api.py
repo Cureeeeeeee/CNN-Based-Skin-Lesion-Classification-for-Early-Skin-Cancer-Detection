@@ -14,25 +14,27 @@ from src.skinlesion.train import select_device
 
 app = FastAPI(title="Skin Lesion Analysis API")
 
-MODEL_PATH = os.getenv("SKINLESION_MODEL_PATH", "runs/mobilenetv3_small_100/best.pt")
+MODEL_PATH = os.getenv("SKINLESION_MODEL_PATH", "runs/resnet50/best.pt")
 DEVICE = select_device(os.getenv("SKINLESION_DEVICE", "auto"))
 MODEL = None
+MODEL_NAME = None
 CLASSES: list[str] = []
 TRANSFORM = None
 
 
 @app.on_event("startup")
 def load_model() -> None:
-    global MODEL, CLASSES, TRANSFORM
+    global MODEL, MODEL_NAME, CLASSES, TRANSFORM
     if not os.path.exists(MODEL_PATH):
         return
 
     checkpoint = torch.load(MODEL_PATH, map_location=DEVICE)
     CLASSES = checkpoint["classes"]
+    MODEL_NAME = checkpoint["model_name"]
     image_size = checkpoint["config"]["data"]["image_size"]
     TRANSFORM = build_transform(split="test", image_size=image_size)
     MODEL = create_model(
-        checkpoint["model_name"],
+        MODEL_NAME,
         num_classes=len(CLASSES),
         pretrained=False,
     ).to(DEVICE)
@@ -42,7 +44,24 @@ def load_model() -> None:
 
 @app.get("/health")
 def health() -> dict[str, object]:
-    return {"status": "ok", "model_loaded": MODEL is not None}
+    return {
+        "status": "ok",
+        "model_loaded": MODEL is not None,
+        "model_name": MODEL_NAME,
+        "checkpoint": MODEL_PATH,
+        "device": str(DEVICE),
+    }
+
+
+@app.get("/model-info")
+def model_info() -> dict[str, object]:
+    return {
+        "default_model": MODEL_NAME or "resnet50",
+        "checkpoint": MODEL_PATH,
+        "classes": CLASSES,
+        "selection_reason": "ResNet50 achieved the best initial test accuracy and macro F1-score.",
+        "disclaimer": "Research prototype only; not for medical diagnosis.",
+    }
 
 
 @app.post("/predict")
@@ -68,6 +87,8 @@ async def predict(image: UploadFile = File(...)) -> dict[str, object]:
     ]
 
     return {
+        "model": MODEL_NAME,
+        "checkpoint": MODEL_PATH,
         "predicted_class": candidates[0]["class"],
         "confidence": candidates[0]["confidence"],
         "top_candidates": candidates,
