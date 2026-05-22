@@ -1,0 +1,31 @@
+{
+  "sample": {
+    "image_id": "ISIC_0024351",
+    "true_label": "mel",
+    "split": "test",
+    "source_image_path": "data\\processed\\images\\ISIC-images\\ISIC_0024351.jpg",
+    "demo_image_path": "docs\\demo\\images\\weak_class_mel_ISIC_0024351.jpg"
+  },
+  "prediction": {
+    "model": "resnet50",
+    "checkpoint": "runs/resnet50/best.pt",
+    "predicted_class": "nv",
+    "confidence": 0.799071,
+    "top_candidates": [
+      {
+        "class": "nv",
+        "confidence": 0.799071
+      },
+      {
+        "class": "mel",
+        "confidence": 0.104659
+      },
+      {
+        "class": "bkl",
+        "confidence": 0.095336
+      }
+    ],
+    "top1_correct": false,
+    "true_label_in_top3": true
+  }
+}
