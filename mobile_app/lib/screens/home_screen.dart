@@ -63,63 +63,80 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          const _HeroPanel(),
-          const SizedBox(height: 18),
-          _ImagePreviewCard(selectedImage: _selectedImage),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _pickImage(ImageSource.camera),
-                  icon: const Icon(Icons.photo_camera_outlined),
-                  label: const Text('Take Photo'),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
+          children: [
+            const _IntroHeader(),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: _ActionTile(
+                    icon: Icons.photo_camera_rounded,
+                    label: 'Take Photo',
+                    onTap: () => _pickImage(ImageSource.camera),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () => _pickImage(ImageSource.gallery),
-                  icon: const Icon(Icons.upload_file_outlined),
-                  label: const Text('Upload Image'),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _ActionTile(
+                    icon: Icons.image_rounded,
+                    label: 'Upload Image',
+                    onTap: () => _pickImage(ImageSource.gallery),
+                  ),
                 ),
-              ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            _ImagePreviewCard(selectedImage: _selectedImage),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: _openClassification,
+              icon: const Icon(Icons.analytics_outlined),
+              label: const Text('Analyze'),
+            ),
+            if (_message != null) ...[
+              const SizedBox(height: 12),
+              _InfoCard(message: _message!),
             ],
-          ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: _openClassification,
-            icon: const Icon(Icons.analytics_outlined),
-            label: const Text('Analyze'),
-          ),
-          if (_message != null) ...[
-            const SizedBox(height: 12),
-            _InfoCard(message: _message!),
+            const SizedBox(height: 14),
+            const _DisclaimerCard(),
           ],
-          const SizedBox(height: 16),
-          const _DisclaimerCard(),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _HeroPanel extends StatelessWidget {
-  const _HeroPanel();
+class _IntroHeader extends StatelessWidget {
+  const _IntroHeader();
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Icon(
+                Icons.health_and_safety_rounded,
+                color: Color(0xFF2563EB),
+                size: 30,
+              ),
+            ),
+            const SizedBox(height: 14),
             Text(
               'Skin Lesion Classification',
+              textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                     color: const Color(0xFF0F172A),
@@ -127,10 +144,69 @@ class _HeroPanel extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'AI-based skin lesion screening support. This is for educational demonstration only.',
-              style: TextStyle(color: Color(0xFF475569), height: 1.4),
+              'AI-based skin lesion screening support',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF475569),
+                fontSize: 15,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'For educational demonstration only. This is not a medical diagnosis.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF64748B),
+                fontSize: 12.5,
+                height: 1.35,
+              ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFF2563EB),
+      borderRadius: BorderRadius.circular(14),
+      elevation: 2,
+      shadowColor: const Color(0x332563EB),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white, size: 30),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -146,20 +222,67 @@ class _ImagePreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: AspectRatio(
-        aspectRatio: 1,
-        child: selectedImage == null
-            ? const Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.image_search_rounded, size: 56),
-                    SizedBox(height: 10),
-                    Text('No image selected'),
-                  ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Text(
+              'Selected Image',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+          ),
+          AspectRatio(
+            aspectRatio: 1.18,
+            child: selectedImage == null
+                ? const _EmptyImageState()
+                : Image.memory(selectedImage!.bytes, fit: BoxFit.cover),
+          ),
+          if (selectedImage != null)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                selectedImage!.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF64748B),
+                  fontWeight: FontWeight.w600,
                 ),
-              )
-            : Image.memory(selectedImage!.bytes, fit: BoxFit.cover),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyImageState extends StatelessWidget {
+  const _EmptyImageState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFF8FAFC),
+      child: const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.image_search_rounded,
+              size: 52,
+              color: Color(0xFF93A4B8),
+            ),
+            SizedBox(height: 10),
+            Text(
+              'No image selected',
+              style: TextStyle(color: Color(0xFF64748B)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -194,11 +317,21 @@ class _DisclaimerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Card(
+      color: Color(0xFFFFFBEB),
       child: Padding(
         padding: EdgeInsets.all(14),
-        child: Text(
-          'This app is not a medical diagnosis tool. Please consult a healthcare professional for clinical evaluation.',
-          style: TextStyle(color: Color(0xFF475569)),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706)),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'This app is not a medical diagnosis tool. Please consult a healthcare professional for clinical evaluation.',
+                style: TextStyle(color: Color(0xFF92400E), height: 1.35),
+              ),
+            ),
+          ],
         ),
       ),
     );

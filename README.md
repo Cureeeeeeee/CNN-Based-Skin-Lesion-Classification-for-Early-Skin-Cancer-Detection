@@ -224,6 +224,10 @@ The Flutter prototype is in `mobile_app/`. It is organised into four screens:
 - `ResultScreen`: show final top-3 predictions and confidence scores.
 - `ModelComparisonScreen`: show the real CNN comparison metrics.
 
+The UI has been polished into a product-like mobile demo inspired by a clean
+health app layout, with a blue app bar, rounded cards, clear image preview
+areas, confidence displays, and presentation-friendly API/mock modes.
+
 It supports:
 
 - camera/gallery image selection

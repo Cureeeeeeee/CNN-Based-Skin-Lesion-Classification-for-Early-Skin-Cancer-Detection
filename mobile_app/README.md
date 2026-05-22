@@ -13,6 +13,10 @@ is not reachable.
 - ResultScreen: final top-3 predictions, confidence scores, and disclaimer.
 - ModelComparisonScreen: MobileNetV3, EfficientNet-B0, DenseNet121, and ResNet50 metrics.
 
+The current UI is styled as a polished four-screen mobile demo with a blue
+health-app theme, rounded cards, prominent image preview areas, confidence
+cards, and clear presentation fallback through mock mode.
+
 ## Run
 
 Install Flutter, then run:
@@ -38,6 +42,9 @@ Default API URL:
 The API URL is editable inside the Classification screen. API mode calls
 FastAPI `/predict`; mock mode uses a fixed top-3 output and does not call the
 backend.
+
+ResNet50 remains the default deployment model. The mobile UI only changes the
+presentation layer and does not alter the backend model selection.
 
 If building web from the current OneDrive path with Chinese characters, use:
 
