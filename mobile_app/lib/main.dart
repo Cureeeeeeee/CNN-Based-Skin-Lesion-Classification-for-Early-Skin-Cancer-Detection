@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'screens/analyze_screen.dart';
-import 'screens/model_info_screen.dart';
+import 'screens/home_screen.dart';
 
 void main() {
   runApp(const SkinLesionApp());
@@ -12,63 +11,50 @@ class SkinLesionApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const primaryBlue = Color(0xFF2563EB);
+
     return MaterialApp(
-      title: 'Skin Lesion Analysis',
+      title: 'Skin Lesion Classification',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0F766E)),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: primaryBlue,
+          brightness: Brightness.light,
+        ),
+        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
         useMaterial3: true,
-        cardTheme: const CardThemeData(
+        appBarTheme: const AppBarTheme(
+          centerTitle: false,
+          backgroundColor: Colors.white,
+          foregroundColor: Color(0xFF0F172A),
+          elevation: 0,
+        ),
+        cardTheme: CardThemeData(
+          color: Colors.white,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(8)),
-            side: BorderSide(color: Color(0xFFE5E7EB)),
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFFE2E8F0)),
+          ),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
           ),
         ),
       ),
-      home: const AppShell(),
-    );
-  }
-}
-
-class AppShell extends StatefulWidget {
-  const AppShell({super.key});
-
-  @override
-  State<AppShell> createState() => _AppShellState();
-}
-
-class _AppShellState extends State<AppShell> {
-  int _index = 0;
-
-  @override
-  Widget build(BuildContext context) {
-    final pages = [
-      const AnalyzeScreen(),
-      const ModelInfoScreen(),
-    ];
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Skin Lesion Analysis'),
-      ),
-      body: pages[_index],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (value) => setState(() => _index = value),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.camera_alt_outlined),
-            selectedIcon: Icon(Icons.camera_alt),
-            label: 'Analyze',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.bar_chart_outlined),
-            selectedIcon: Icon(Icons.bar_chart),
-            label: 'Models',
-          ),
-        ],
-      ),
+      home: const HomeScreen(),
     );
   }
 }

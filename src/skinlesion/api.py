@@ -38,6 +38,39 @@ MODEL_PERFORMANCE = [
     {"model": "ResNet50", "test_accuracy": 0.8022, "macro_f1": 0.6903},
 ]
 
+CLASS_DISPLAY_NAMES = {
+    "akiec": "Actinic keratoses and intraepithelial carcinoma",
+    "bcc": "Basal cell carcinoma",
+    "bkl": "Benign keratosis-like lesions",
+    "df": "Dermatofibroma",
+    "mel": "Melanoma",
+    "nv": "Melanocytic nevi",
+    "vasc": "Vascular lesions",
+}
+
+
+def display_model_name(model_name: str | None) -> str | None:
+    if model_name == "resnet50":
+        return "ResNet50"
+    return model_name
+
+
+@app.get("/")
+def root() -> dict[str, object]:
+    return {
+        "project": "CNN-Based Skin Lesion Classification",
+        "status": "running" if MODEL is not None else "degraded",
+        "default_model": "ResNet50",
+        "model_loaded": MODEL is not None,
+        "endpoints": {
+            "health": "/health",
+            "model_info": "/model-info",
+            "predict": "/predict",
+            "docs": "/docs",
+        },
+        "disclaimer": "This result is for educational demonstration only and is not a medical diagnosis.",
+    }
+
 
 @app.on_event("startup")
 def load_model() -> None:
@@ -74,8 +107,8 @@ def health() -> dict[str, object]:
     return {
         "status": "ok" if MODEL is not None else "degraded",
         "model_loaded": MODEL is not None,
-        "default_model": "resnet50",
-        "model_name": MODEL_NAME,
+        "default_model": "ResNet50",
+        "model_name": display_model_name(MODEL_NAME),
         "checkpoint": MODEL_PATH,
         "device": str(DEVICE),
         "load_error": LOAD_ERROR,
@@ -85,10 +118,12 @@ def health() -> dict[str, object]:
 @app.get("/model-info")
 def model_info() -> dict[str, object]:
     return {
-        "default_model": "resnet50",
-        "loaded_model": MODEL_NAME,
+        "default_model": "ResNet50",
+        "loaded_model": display_model_name(MODEL_NAME),
+        "raw_loaded_model": MODEL_NAME,
         "checkpoint": MODEL_PATH,
         "classes": CLASSES,
+        "class_display_names": CLASS_DISPLAY_NAMES,
         "performance": MODEL_PERFORMANCE,
         "selection_reason": "ResNet50 achieved the best initial test accuracy and macro F1-score.",
         "disclaimer": "This result is for educational demonstration only and is not a medical diagnosis.",
@@ -134,16 +169,29 @@ async def predict(image: UploadFile = File(...)) -> dict[str, object]:
 
     top_count = min(3, len(CLASSES))
     confidence_values, class_indices = torch.topk(probabilities, k=top_count)
-    candidates = [
-        {"class": CLASSES[index], "confidence": float(confidence)}
+    predictions = [
+        {
+            "label": CLASSES[index],
+            "display_label": CLASS_DISPLAY_NAMES.get(CLASSES[index], CLASSES[index]),
+            "confidence": float(confidence),
+        }
         for confidence, index in zip(confidence_values.tolist(), class_indices.tolist())
+    ]
+    top_candidates = [
+        {
+            "class": prediction["label"],
+            "display_label": prediction["display_label"],
+            "confidence": prediction["confidence"],
+        }
+        for prediction in predictions
     ]
 
     return {
-        "model": MODEL_NAME,
+        "model": display_model_name(MODEL_NAME),
         "checkpoint": MODEL_PATH,
-        "predicted_class": candidates[0]["class"],
-        "confidence": candidates[0]["confidence"],
-        "top_candidates": candidates,
+        "predicted_class": predictions[0]["label"],
+        "confidence": predictions[0]["confidence"],
+        "predictions": predictions,
+        "top_candidates": top_candidates,
         "disclaimer": "This result is for educational demonstration only and is not a medical diagnosis.",
     }
