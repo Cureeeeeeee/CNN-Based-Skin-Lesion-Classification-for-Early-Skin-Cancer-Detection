@@ -136,6 +136,12 @@ Start the API:
 uvicorn src.skinlesion.api:app --host 0.0.0.0 --port 8000
 ```
 
+Open the root endpoint:
+
+```bash
+curl http://127.0.0.1:8000/
+```
+
 Test health:
 
 ```bash
@@ -148,6 +154,12 @@ Test model info:
 curl http://127.0.0.1:8000/model-info
 ```
 
+Open the interactive API documentation:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
 Test prediction:
 
 ```bash
@@ -155,16 +167,23 @@ curl -X POST http://127.0.0.1:8000/predict \
   -F "image=@docs/demo/images/easy_correct_ISIC_0024308.jpg"
 ```
 
+Or run the standard smoke-test script:
+
+```bash
+python scripts/test_api_demo.py --base-url http://127.0.0.1:8000
+```
+
 `POST /predict` returns clean JSON with:
 
 - selected model
 - predicted class
 - confidence score
-- top-3 candidates
+- top-3 predictions as `predictions`, each with `label` and `confidence`
 - educational-use disclaimer
 
 The API includes error handling for empty uploads, invalid image files, missing
-checkpoints, model loading failures, and unexpected inference errors.
+checkpoints, model loading failures, and unexpected inference errors. CORS is
+enabled for local Flutter Web demo development.
 
 ## Stable Demo Set
 
@@ -191,7 +210,14 @@ These files are intended to prevent live demo failure during a presentation.
 
 ## Flutter Prototype
 
-The Flutter prototype is in `mobile_app/`. It supports:
+The Flutter prototype is in `mobile_app/`. It is organised into four screens:
+
+- `HomeScreen`: select or upload an image.
+- `ClassificationScreen`: preview the image, choose API or mock mode, and run analysis.
+- `ResultScreen`: show final top-3 predictions and confidence scores.
+- `ModelComparisonScreen`: show the real CNN comparison metrics.
+
+It supports:
 
 - camera/gallery image selection
 - selected image preview
@@ -208,7 +234,13 @@ Run:
 ```bash
 cd mobile_app
 flutter pub get
-flutter run
+flutter run -d chrome
+```
+
+For Flutter Web use:
+
+```text
+http://127.0.0.1:8000
 ```
 
 For Android emulator use:
@@ -228,6 +260,10 @@ If building web from this OneDrive path with Chinese characters, use:
 ```bash
 flutter build web --no-tree-shake-icons
 ```
+
+API mode sends the selected image to `POST /predict` using multipart form data
+and displays the returned ResNet50 top-3 predictions. Mock mode does not call
+the backend and uses a fixed sample output for presentation safety.
 
 ## Known Limitations
 

@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  cross_file: ^0.3.5+2
   http: ^1.2.2
   image_picker: ^1.1.2
 
@@ -19,4 +20,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
