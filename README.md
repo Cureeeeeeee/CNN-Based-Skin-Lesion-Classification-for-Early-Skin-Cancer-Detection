@@ -30,6 +30,7 @@ docs/
   figures/                        Curves, model comparison, confusion matrices
   initial_experiment_results.md   Result summary for reports
   mobile_app_architecture.md      Mobile/backend workflow diagram
+  presentation_demo_runbook.md    Stable presentation demo steps
   validation.md                   Latest validation notes
 mobile_app/                       Flutter prototype
 notebooks/                        Clean notebook for demo/submission
@@ -188,6 +189,12 @@ enabled for local Flutter Web demo development.
 ## Stable Demo Set
 
 Stable demo assets are in `docs/demo/`.
+
+For a step-by-step live demonstration plan, use:
+
+```text
+docs/presentation_demo_runbook.md
+```
 
 Regenerate them:
 

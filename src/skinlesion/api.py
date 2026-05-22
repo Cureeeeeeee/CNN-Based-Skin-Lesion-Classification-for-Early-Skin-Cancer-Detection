@@ -38,6 +38,16 @@ MODEL_PERFORMANCE = [
     {"model": "ResNet50", "test_accuracy": 0.8022, "macro_f1": 0.6903},
 ]
 
+CLASS_DISPLAY_NAMES = {
+    "akiec": "Actinic keratoses and intraepithelial carcinoma",
+    "bcc": "Basal cell carcinoma",
+    "bkl": "Benign keratosis-like lesions",
+    "df": "Dermatofibroma",
+    "mel": "Melanoma",
+    "nv": "Melanocytic nevi",
+    "vasc": "Vascular lesions",
+}
+
 
 def display_model_name(model_name: str | None) -> str | None:
     if model_name == "resnet50":
@@ -113,6 +123,7 @@ def model_info() -> dict[str, object]:
         "raw_loaded_model": MODEL_NAME,
         "checkpoint": MODEL_PATH,
         "classes": CLASSES,
+        "class_display_names": CLASS_DISPLAY_NAMES,
         "performance": MODEL_PERFORMANCE,
         "selection_reason": "ResNet50 achieved the best initial test accuracy and macro F1-score.",
         "disclaimer": "This result is for educational demonstration only and is not a medical diagnosis.",
@@ -159,11 +170,19 @@ async def predict(image: UploadFile = File(...)) -> dict[str, object]:
     top_count = min(3, len(CLASSES))
     confidence_values, class_indices = torch.topk(probabilities, k=top_count)
     predictions = [
-        {"label": CLASSES[index], "confidence": float(confidence)}
+        {
+            "label": CLASSES[index],
+            "display_label": CLASS_DISPLAY_NAMES.get(CLASSES[index], CLASSES[index]),
+            "confidence": float(confidence),
+        }
         for confidence, index in zip(confidence_values.tolist(), class_indices.tolist())
     ]
     top_candidates = [
-        {"class": prediction["label"], "confidence": prediction["confidence"]}
+        {
+            "class": prediction["label"],
+            "display_label": prediction["display_label"],
+            "confidence": prediction["confidence"],
+        }
         for prediction in predictions
     ]
 

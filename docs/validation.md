@@ -13,6 +13,10 @@ Latest delivery-readiness validation:
   - `GET /docs`: passed with HTTP 200.
   - `POST /predict`: passed through `scripts/test_api_demo.py`.
   - Demo top-3 output for `easy_correct_ISIC_0024308.jpg`: `nv` 91.28%, `mel` 8.58%, `bkl` 0.13%.
+  - Prediction JSON includes raw labels, display labels, and confidence scores.
+- FastAPI clean-port validation on `127.0.0.1:8011`:
+  - `POST /predict`: passed after adding readable display labels.
+  - Demo top-3 display output: `nv - Melanocytic nevi`, `mel - Melanoma`, `bkl - Benign keratosis-like lesions`.
 - FastAPI TestClient:
   - `GET /health`: passed, ResNet50 loaded.
   - `GET /model-info`: passed, default model reported as ResNet50.
@@ -28,6 +32,7 @@ Latest delivery-readiness validation:
   - `flutter build web --no-tree-shake-icons`: passed.
   - Flutter Web API mode is implemented with multipart upload to `/predict`.
   - Flutter mock mode is implemented as a fallback and covered by UI flow.
+  - Prediction results show both HAM10000 class codes and readable class names.
   - Android emulator workflow is documented with `http://10.0.2.2:8000`; not run in this validation pass.
 
 ResNet50 remains the default deployment model because it has the best validated

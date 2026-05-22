@@ -1,17 +1,45 @@
 class PredictionCandidate {
   const PredictionCandidate({
     required this.className,
+    required this.displayLabel,
     required this.confidence,
   });
 
   final String className;
+  final String displayLabel;
   final double confidence;
 
   factory PredictionCandidate.fromJson(Map<String, dynamic> json) {
+    final className = (json['label'] ?? json['class']) as String;
     return PredictionCandidate(
-      className: (json['label'] ?? json['class']) as String,
+      className: className,
+      displayLabel:
+          (json['display_label'] as String?) ?? displayNameFor(className),
       confidence: (json['confidence'] as num).toDouble(),
     );
+  }
+
+  String get displayText => '${className.toUpperCase()} - $displayLabel';
+
+  static String displayNameFor(String className) {
+    switch (className) {
+      case 'akiec':
+        return 'Actinic keratoses and intraepithelial carcinoma';
+      case 'bcc':
+        return 'Basal cell carcinoma';
+      case 'bkl':
+        return 'Benign keratosis-like lesions';
+      case 'df':
+        return 'Dermatofibroma';
+      case 'mel':
+        return 'Melanoma';
+      case 'nv':
+        return 'Melanocytic nevi';
+      case 'vasc':
+        return 'Vascular lesions';
+      default:
+        return className;
+    }
   }
 }
 
@@ -58,9 +86,21 @@ class PredictionResult {
     predictedClass: 'mel',
     confidence: 0.874,
     topCandidates: [
-      PredictionCandidate(className: 'mel', confidence: 0.874),
-      PredictionCandidate(className: 'bcc', confidence: 0.085),
-      PredictionCandidate(className: 'nv', confidence: 0.021),
+      PredictionCandidate(
+        className: 'mel',
+        displayLabel: 'Melanoma',
+        confidence: 0.874,
+      ),
+      PredictionCandidate(
+        className: 'bcc',
+        displayLabel: 'Basal cell carcinoma',
+        confidence: 0.085,
+      ),
+      PredictionCandidate(
+        className: 'nv',
+        displayLabel: 'Melanocytic nevi',
+        confidence: 0.021,
+      ),
     ],
     disclaimer:
         'This result is for educational demonstration only and is not a medical diagnosis.',

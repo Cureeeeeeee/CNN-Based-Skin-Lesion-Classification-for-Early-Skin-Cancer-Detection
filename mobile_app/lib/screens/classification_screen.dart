@@ -213,7 +213,7 @@ class _InlineResult extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            Text('Predicted class: ${result.predictedClass.toUpperCase()}'),
+            Text('Predicted class: ${result.topCandidates.first.displayText}'),
             const SizedBox(height: 8),
             for (final candidate in result.topCandidates)
               _ConfidenceRow(candidate: candidate),
@@ -244,7 +244,7 @@ class _ConfidenceRow extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text(candidate.className)),
+              Expanded(child: Text(candidate.displayText)),
               Text('${(value * 100).toStringAsFixed(1)}%'),
             ],
           ),

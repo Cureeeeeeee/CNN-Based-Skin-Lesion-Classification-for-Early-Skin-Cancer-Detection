@@ -38,7 +38,7 @@ class ResultScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Prediction: ${result.predictedClass.toUpperCase()}',
+                    'Prediction: ${result.topCandidates.first.displayText}',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),
@@ -120,7 +120,7 @@ class _CandidateTile extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  candidate.className.toUpperCase(),
+                  candidate.displayText,
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),

@@ -76,8 +76,9 @@ def main() -> None:
     print("Top-3 predictions:")
     for index, item in enumerate(predictions, start=1):
         label = item.get("label") or item.get("class")
+        display_label = item.get("display_label") or label
         confidence = float(item["confidence"])
-        print(f"  {index}. {label}: {confidence:.2%}")
+        print(f"  {index}. {label} - {display_label}: {confidence:.2%}")
 
 
 if __name__ == "__main__":
