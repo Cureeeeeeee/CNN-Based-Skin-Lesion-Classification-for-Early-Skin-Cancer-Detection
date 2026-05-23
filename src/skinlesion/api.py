@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import os
+import time
+import uuid
+from collections import Counter
 from io import BytesIO
 from pathlib import Path
 
@@ -9,7 +12,9 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
 
+from src.skinlesion.config import load_config
 from src.skinlesion.data import build_transform
+from src.skinlesion.ensemble import LoadedModel, compute_ensemble, load_ensemble, run_inference_single
 from src.skinlesion.models import create_model
 from src.skinlesion.train import select_device
 
@@ -24,12 +29,17 @@ app.add_middleware(
 )
 
 MODEL_PATH = os.getenv("SKINLESION_MODEL_PATH", "runs/resnet50/best.pt")
+CONFIG_PATH = os.getenv("SKINLESION_CONFIG_PATH", "configs/ham10000.yaml")
 DEVICE = select_device(os.getenv("SKINLESION_DEVICE", "auto"))
 MODEL = None
 MODEL_NAME = None
 CLASSES: list[str] = []
 TRANSFORM = None
 LOAD_ERROR: str | None = None
+
+ENSEMBLE_MODELS: dict[str, LoadedModel] = {}
+ENSEMBLE_VERSION: str = "ensemble-v1"
+ENSEMBLE_LOAD_ERRORS: list[str] = []
 
 MODEL_PERFORMANCE = [
     {"model": "MobileNetV3 Small", "test_accuracy": 0.6776, "macro_f1": 0.5726},
@@ -100,6 +110,20 @@ def load_model() -> None:
         CLASSES = []
         TRANSFORM = None
         LOAD_ERROR = f"Model loading failed: {exc}"
+
+
+@app.on_event("startup")
+def load_ensemble_models() -> None:
+    global ENSEMBLE_MODELS, ENSEMBLE_VERSION, ENSEMBLE_LOAD_ERRORS
+    try:
+        config = load_config(CONFIG_PATH)
+        ens_cfg: dict[str, object] = config.get("ensemble", {})
+        ENSEMBLE_VERSION = str(ens_cfg.get("version", "ensemble-v1"))
+        weights: dict[str, float] = ens_cfg.get("weights", {})
+        checkpoints: dict[str, str] = ens_cfg.get("checkpoints", {})
+        ENSEMBLE_MODELS, ENSEMBLE_LOAD_ERRORS = load_ensemble(checkpoints, weights, DEVICE)
+    except Exception as exc:
+        ENSEMBLE_LOAD_ERRORS = [f"Ensemble config error: {exc}"]
 
 
 @app.get("/health")
@@ -194,4 +218,109 @@ async def predict(image: UploadFile = File(...)) -> dict[str, object]:
         "predictions": predictions,
         "top_candidates": top_candidates,
         "disclaimer": "This result is for educational demonstration only and is not a medical diagnosis.",
+    }
+
+
+@app.post("/predict-ensemble")
+async def predict_ensemble(image: UploadFile = File(...)) -> dict[str, object]:
+    if not ENSEMBLE_MODELS:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "ensemble_unavailable",
+                "message": "No ensemble models loaded. " + "; ".join(ENSEMBLE_LOAD_ERRORS),
+            },
+        )
+
+    contents = await image.read()
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "empty_file", "message": "Uploaded image file is empty."},
+        )
+
+    try:
+        pil_image = Image.open(BytesIO(contents)).convert("RGB")
+        pil_image.load()
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_image", "message": "Uploaded file is not a valid image."},
+        ) from exc
+
+    request_id = str(uuid.uuid4())
+    t_start = time.perf_counter()
+
+    try:
+        prob_vectors: list[list[float]] = []
+        model_weights: list[float] = []
+        per_model: list[dict[str, object]] = []
+        classes: list[str] = []
+
+        for loaded in ENSEMBLE_MODELS.values():
+            if not classes:
+                classes = loaded.classes
+            tensor = loaded.transform(pil_image).unsqueeze(0).to(DEVICE)
+            probs, top_k = run_inference_single(loaded, tensor)
+            prob_vectors.append(probs)
+            model_weights.append(loaded.weight)
+            per_model.append({
+                "model": loaded.display_name,
+                "weight": loaded.weight,
+                "predicted_class": top_k[0]["label"],
+                "display_label": CLASS_DISPLAY_NAMES.get(top_k[0]["label"], top_k[0]["label"]),
+                "confidence": top_k[0]["confidence"],
+                "predictions": [
+                    {
+                        "label": p["label"],
+                        "display_label": CLASS_DISPLAY_NAMES.get(p["label"], p["label"]),
+                        "confidence": p["confidence"],
+                    }
+                    for p in top_k
+                ],
+            })
+
+        ensemble_top = compute_ensemble(prob_vectors, model_weights, classes)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "inference_failed", "message": str(exc)},
+        ) from exc
+
+    inference_time_ms = round((time.perf_counter() - t_start) * 1000, 1)
+
+    ensemble_predictions = [
+        {
+            "label": p["label"],
+            "display_label": CLASS_DISPLAY_NAMES.get(p["label"], p["label"]),
+            "confidence": p["confidence"],
+        }
+        for p in ensemble_top
+    ]
+
+    top_classes = [m["predicted_class"] for m in per_model]
+    models_agree = len(set(top_classes)) == 1
+    agreement_note: str | None = None
+    if not models_agree:
+        counts = Counter(top_classes)
+        parts = [
+            f"{count}× {CLASS_DISPLAY_NAMES.get(cls, cls)}"
+            for cls, count in counts.most_common()
+        ]
+        agreement_note = "Models disagree. Top predictions: " + ", ".join(parts)
+
+    return {
+        "request_id": request_id,
+        "inference_time_ms": inference_time_ms,
+        "model_version": ENSEMBLE_VERSION,
+        "ensemble": {
+            "predicted_class": ensemble_predictions[0]["label"],
+            "display_label": ensemble_predictions[0]["display_label"],
+            "confidence": ensemble_predictions[0]["confidence"],
+            "predictions": ensemble_predictions,
+        },
+        "model_outputs": per_model,
+        "models_agree": models_agree,
+        "agreement_note": agreement_note,
+        "disclaimer": "This result is for research-grade diagnostic-support purposes only and is not a medical diagnosis.",
     }

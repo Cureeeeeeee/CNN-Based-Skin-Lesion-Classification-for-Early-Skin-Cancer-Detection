@@ -80,6 +80,27 @@ def main() -> None:
         confidence = float(item["confidence"])
         print(f"  {index}. {label} - {display_label}: {confidence:.2%}")
 
+    ensemble = post_image(f"{base_url}/predict-ensemble", image_path)
+    ens = ensemble.get("ensemble", {})
+    model_outputs = ensemble.get("model_outputs", [])
+    if not ens.get("predicted_class"):
+        raise AssertionError("Ensemble response missing ensemble.predicted_class")
+    if len(model_outputs) == 0:
+        raise AssertionError("Ensemble response has no model_outputs")
+
+    print()
+    print("Ensemble validation passed")
+    print(f"  request_id:        {ensemble.get('request_id')}")
+    print(f"  inference_time_ms: {ensemble.get('inference_time_ms')}")
+    print(f"  model_version:     {ensemble.get('model_version')}")
+    print(f"  models_agree:      {ensemble.get('models_agree')}")
+    if ensemble.get("agreement_note"):
+        print(f"  note:              {ensemble.get('agreement_note')}")
+    print(f"  Ensemble top-1:    {ens.get('predicted_class')} - {ens.get('display_label')} ({ens.get('confidence'):.2%})")
+    print("  Per-model top-1:")
+    for m in model_outputs:
+        print(f"    {m['model']:22s} (w={m['weight']:.2f})  {m['predicted_class']:5s}  {m['confidence']:.2%}")
+
 
 if __name__ == "__main__":
     main()

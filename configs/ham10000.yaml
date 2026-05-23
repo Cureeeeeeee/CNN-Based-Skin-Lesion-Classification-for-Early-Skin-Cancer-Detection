@@ -32,3 +32,16 @@ models:
 
 output:
   run_dir: runs
+
+ensemble:
+  version: ensemble-v1
+  weights:
+    resnet50: 0.38
+    densenet121: 0.37
+    efficientnet_b0: 0.20
+    mobilenetv3_small_100: 0.05
+  checkpoints:
+    resnet50: runs/resnet50/best.pt
+    densenet121: runs/densenet121/best.pt
+    efficientnet_b0: runs/efficientnet_b0/best.pt
+    mobilenetv3_small_100: runs/mobilenetv3_small_100/best.pt
