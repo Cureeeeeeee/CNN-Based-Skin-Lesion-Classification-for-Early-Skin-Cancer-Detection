@@ -30,6 +30,8 @@ Latest delivery-readiness validation:
   - `dart analyze lib test`: passed with no issues.
   - `flutter test`: passed.
   - `flutter build web --no-tree-shake-icons`: passed.
+  - Product-like Flutter UI polish completed for Home, Classification, Result, and Model Comparison screens.
+  - Current `127.0.0.1:8000` service smoke test passed for root, docs, and `/predict` top-3 predictions.
   - Flutter Web API mode is implemented with multipart upload to `/predict`.
   - Flutter mock mode is implemented as a fallback and covered by UI flow.
   - Prediction results show both HAM10000 class codes and readable class names.
