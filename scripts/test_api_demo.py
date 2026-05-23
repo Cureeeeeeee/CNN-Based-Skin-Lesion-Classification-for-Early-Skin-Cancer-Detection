@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import mimetypes
+from io import BytesIO
 from pathlib import Path
 from urllib import error, request
 
@@ -106,6 +108,23 @@ def main() -> None:
     if "calibrated" not in ensemble:
         raise AssertionError("/predict-ensemble response missing 'calibrated' flag")
 
+    cam = post_image(f"{base_url}/predict-cam", image_path)
+    for required in ("heatmap_png_b64", "predicted_class", "target_layer", "method"):
+        if required not in cam:
+            raise AssertionError(f"/predict-cam response missing '{required}'")
+    if cam["method"] != "grad-cam":
+        raise AssertionError(f"/predict-cam method should be 'grad-cam', got {cam['method']!r}")
+    try:
+        decoded = base64.b64decode(cam["heatmap_png_b64"], validate=True)
+    except Exception as exc:  # noqa: BLE001
+        raise AssertionError(f"/predict-cam heatmap is not valid base64: {exc}") from exc
+    try:
+        from PIL import Image as _Image
+        decoded_img = _Image.open(BytesIO(decoded))
+        decoded_img.verify()
+    except Exception as exc:  # noqa: BLE001
+        raise AssertionError(f"/predict-cam heatmap is not a valid PNG: {exc}") from exc
+
     print()
     print("Ensemble validation passed")
     print(f"  request_id:        {ensemble.get('request_id')}")
@@ -125,6 +144,15 @@ def main() -> None:
             f"{m['predicted_class']:5s}  {m['confidence']:.2%}  "
             f"[{cal} T={temp}]"
         )
+
+    print()
+    print("Grad-CAM validation passed")
+    print(f"  model:         {cam.get('model')}")
+    print(f"  predicted:     {cam.get('predicted_class')} ({cam.get('confidence'):.2%})")
+    print(f"  target_layer:  {cam.get('target_layer')}")
+    print(f"  calibrated:    {cam.get('calibrated')} (T={cam.get('temperature')})")
+    print(f"  heatmap PNG:   {len(cam.get('heatmap_png_b64', ''))} chars base64 -> "
+          f"{decoded_img.size if decoded_img.size else 'unknown'} px")
 
 
 if __name__ == "__main__":

@@ -48,32 +48,38 @@ class _ClassificationScreenState extends State<ClassificationScreen> {
       _error = null;
     });
 
+    final apiUrl = _mockMode ? null : _apiUrlController.text;
+
     try {
       if (_ensembleMode) {
         final result = _mockMode
             ? EnsembleResult.mock
-            : await PredictionApi(baseUrl: _apiUrlController.text)
-                .predictEnsemble(widget.selectedImage);
+            : await PredictionApi(baseUrl: apiUrl!).predictEnsemble(
+                widget.selectedImage,
+              );
         if (!mounted) return;
         await Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => ResultScreen.ensemble(
               selectedImage: widget.selectedImage,
               result: result,
+              apiBaseUrl: apiUrl,
             ),
           ),
         );
       } else {
         final result = _mockMode
             ? PredictionResult.mock
-            : await PredictionApi(baseUrl: _apiUrlController.text)
-                .predict(widget.selectedImage);
+            : await PredictionApi(baseUrl: apiUrl!).predict(
+                widget.selectedImage,
+              );
         if (!mounted) return;
         await Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => ResultScreen.single(
               selectedImage: widget.selectedImage,
               result: result,
+              apiBaseUrl: apiUrl,
             ),
           ),
         );

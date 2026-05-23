@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../models/cam_response.dart';
 import '../models/ensemble_result.dart';
 import '../models/prediction_result.dart';
 import '../models/selected_image.dart';
@@ -61,6 +62,28 @@ class PredictionApi {
       throw Exception(_formatError(response));
     }
     return EnsembleResult.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<CamResponse> predictCam(SelectedImage image) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$_cleanBaseUrl/predict-cam'),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'image',
+        image.bytes,
+        filename: image.name,
+      ),
+    );
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+    if (response.statusCode != 200) {
+      throw Exception(_formatError(response));
+    }
+    return CamResponse.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
   }

@@ -1,8 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../models/ensemble_result.dart';
 import '../models/prediction_result.dart';
 import '../models/selected_image.dart';
+import '../services/prediction_api.dart';
 import '../theme/tokens.dart';
 import '../widgets/cards.dart';
 import '../widgets/disclaimer_ribbon.dart';
@@ -14,49 +17,79 @@ import 'safety_about_screen.dart';
 /// Unified result screen. Renders an ensemble or single-model result with
 /// shared chrome (metadata strip, hero, image card, disclaimer ribbon)
 /// and conditional sections (disagreement banner, model breakdown — ensemble
-/// only).
-class ResultScreen extends StatelessWidget {
+/// only). Single-model mode also exposes a lazy "Attention" toggle that
+/// fetches a Grad-CAM overlay from /predict-cam on first tap (Phase B2).
+class ResultScreen extends StatefulWidget {
   const ResultScreen.ensemble({
     super.key,
     required this.selectedImage,
     required EnsembleResult result,
-  })  : _ensemble = result,
-        _single = null;
+    this.apiBaseUrl,
+  })  : ensembleResult = result,
+        singleResult = null;
 
   const ResultScreen.single({
     super.key,
     required this.selectedImage,
     required PredictionResult result,
-  })  : _ensemble = null,
-        _single = result;
+    this.apiBaseUrl,
+  })  : ensembleResult = null,
+        singleResult = result;
 
   final SelectedImage selectedImage;
-  final EnsembleResult? _ensemble;
-  final PredictionResult? _single;
+  final EnsembleResult? ensembleResult;
+  final PredictionResult? singleResult;
+  // Backend base URL used for the lazy Grad-CAM fetch. Null in mock mode
+  // and not used in ensemble mode.
+  final String? apiBaseUrl;
 
-  bool get _isEnsemble => _ensemble != null;
+  @override
+  State<ResultScreen> createState() => _ResultScreenState();
+}
 
-  String get _topClass =>
-      _isEnsemble ? _ensemble!.predictedClass : _single!.predictedClass;
+class _ResultScreenState extends State<ResultScreen> {
+  Uint8List? _heatmapBytes;
+  bool _heatmapLoading = false;
+  String? _heatmapError;
+  bool _attentionOn = false;
 
-  String get _topDisplay =>
-      _isEnsemble ? _ensemble!.displayLabel : _single!.topCandidates.first.displayLabel;
+  bool get _isEnsemble => widget.ensembleResult != null;
+  bool get _isMock => _isEnsemble ? false : widget.singleResult!.isMock;
 
-  double get _topConfidence =>
-      _isEnsemble ? _ensemble!.confidence : _single!.confidence;
+  /// Grad-CAM is offered only in single-model API mode. Ensemble mode and
+  /// mock mode do not have a corresponding backend endpoint.
+  bool get _camAvailable =>
+      !_isEnsemble &&
+      !_isMock &&
+      widget.apiBaseUrl != null &&
+      widget.apiBaseUrl!.isNotEmpty;
 
-  List<PredictionCandidate> get _topCandidates =>
-      _isEnsemble ? _ensemble!.topCandidates : _single!.topCandidates;
+  String get _topClass => _isEnsemble
+      ? widget.ensembleResult!.predictedClass
+      : widget.singleResult!.predictedClass;
 
-  String get _disclaimer =>
-      _isEnsemble ? _ensemble!.disclaimer : _single!.disclaimer;
+  String get _topDisplay => _isEnsemble
+      ? widget.ensembleResult!.displayLabel
+      : widget.singleResult!.topCandidates.first.displayLabel;
 
-  bool get _modelsAgree => _isEnsemble ? _ensemble!.modelsAgree : true;
+  double get _topConfidence => _isEnsemble
+      ? widget.ensembleResult!.confidence
+      : widget.singleResult!.confidence;
 
-  /// True when the backend applied post-hoc temperature calibration. For
-  /// ensembles this requires every loaded model to have a calibration file.
-  bool get _calibrated =>
-      _isEnsemble ? _ensemble!.calibrated : _single!.calibrated;
+  List<PredictionCandidate> get _topCandidates => _isEnsemble
+      ? widget.ensembleResult!.topCandidates
+      : widget.singleResult!.topCandidates;
+
+  String get _disclaimer => _isEnsemble
+      ? widget.ensembleResult!.disclaimer
+      : widget.singleResult!.disclaimer;
+
+  bool get _modelsAgree =>
+      _isEnsemble ? widget.ensembleResult!.modelsAgree : true;
+
+  bool get _calibrated => _isEnsemble
+      ? widget.ensembleResult!.calibrated
+      : widget.singleResult!.calibrated;
 
   /// Effective risk: disagreement (or indeterminate class) outranks the
   /// raw class-based risk. A disagreeing ensemble is uncertain by definition,
@@ -67,32 +100,65 @@ class ResultScreen extends StatelessWidget {
     return classRisk;
   }
 
-  void _openAbout(BuildContext context) {
+  void _openAbout() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const SafetyAboutScreen()),
     );
   }
 
-  void _openModels(BuildContext context) {
+  void _openModels() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const ModelComparisonScreen()),
     );
   }
 
-  void _runNew(BuildContext context) {
+  void _runNew() {
     Navigator.of(context).popUntil((r) => r.isFirst);
+  }
+
+  Future<void> _toggleAttention() async {
+    // Already cached? Just flip.
+    if (_heatmapBytes != null) {
+      setState(() => _attentionOn = !_attentionOn);
+      return;
+    }
+    setState(() {
+      _attentionOn = true;
+      _heatmapLoading = true;
+      _heatmapError = null;
+    });
+    try {
+      final cam = await PredictionApi(baseUrl: widget.apiBaseUrl!)
+          .predictCam(widget.selectedImage);
+      if (!mounted) return;
+      setState(() {
+        _heatmapBytes = cam.heatmapBytes;
+        _heatmapLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _heatmapError =
+            error.toString().replaceFirst('Exception: ', '');
+        _heatmapLoading = false;
+        _attentionOn = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final risk = _effectiveRisk;
-    final eyebrow = _isEnsemble ? 'ENSEMBLE PREDICTION' : 'RESNET50 PREDICTION';
+    final eyebrow =
+        _isEnsemble ? 'ENSEMBLE PREDICTION' : 'RESNET50 PREDICTION';
     final modeLabel = _isEnsemble
-        ? '4-model ensemble · ${_ensemble!.modelOutputs.length} models'
+        ? '4-model ensemble · ${widget.ensembleResult!.modelOutputs.length} models'
         : 'Single model · ResNet50';
-    final version = _isEnsemble ? _ensemble!.modelVersion : _single!.model;
+    final version = _isEnsemble
+        ? widget.ensembleResult!.modelVersion
+        : widget.singleResult!.model;
     final trailing = _isEnsemble
-        ? '${_ensemble!.inferenceTimeMs.toStringAsFixed(0)} ms'
+        ? '${widget.ensembleResult!.inferenceTimeMs.toStringAsFixed(0)} ms'
         : null;
 
     return Scaffold(
@@ -102,7 +168,7 @@ class ResultScreen extends StatelessWidget {
           IconButton(
             tooltip: 'About this system',
             icon: const Icon(Icons.info_outline),
-            onPressed: () => _openAbout(context),
+            onPressed: _openAbout,
           ),
         ],
       ),
@@ -134,19 +200,30 @@ class ResultScreen extends StatelessWidget {
                   confidence: _topConfidence,
                   isEnsemble: _isEnsemble,
                   modelsAgree: _modelsAgree,
-                  modelCount: _isEnsemble ? _ensemble!.modelOutputs.length : 1,
+                  modelCount: _isEnsemble
+                      ? widget.ensembleResult!.modelOutputs.length
+                      : 1,
                   agreeCount: _isEnsemble
-                      ? _ensemble!.modelOutputs
+                      ? widget.ensembleResult!.modelOutputs
                           .where((m) => m.predictedClass == _topClass)
                           .length
                       : 1,
                   calibrated: _calibrated,
                 ),
                 const SizedBox(height: AppSpacing.md),
-                _ImageCard(image: selectedImage),
+                _ImageCard(
+                  image: widget.selectedImage,
+                  camAvailable: _camAvailable,
+                  attentionOn: _attentionOn,
+                  heatmapBytes: _heatmapBytes,
+                  loading: _heatmapLoading,
+                  error: _heatmapError,
+                  onToggle: _toggleAttention,
+                ),
                 if (_isEnsemble && !_modelsAgree) ...[
                   const SizedBox(height: AppSpacing.md),
-                  _DisagreementBanner(note: _ensemble!.agreementNote),
+                  _DisagreementBanner(
+                      note: widget.ensembleResult!.agreementNote),
                 ],
                 const SizedBox(height: AppSpacing.md),
                 _DifferentialCard(
@@ -158,17 +235,19 @@ class ResultScreen extends StatelessWidget {
                 if (_isEnsemble) ...[
                   const SizedBox(height: AppSpacing.md),
                   _ModelBreakdownCard(
-                    outputs: _ensemble!.modelOutputs,
+                    outputs: widget.ensembleResult!.modelOutputs,
                     ensembleTopClass: _topClass,
                   ),
                 ],
                 const SizedBox(height: AppSpacing.md),
                 _MetadataFooter(
-                  inferenceMs:
-                      _isEnsemble ? _ensemble!.inferenceTimeMs : null,
+                  inferenceMs: _isEnsemble
+                      ? widget.ensembleResult!.inferenceTimeMs
+                      : null,
                   version: version,
-                  requestId: _isEnsemble ? _ensemble!.requestId : null,
-                  isMock: _isEnsemble ? false : _single!.isMock,
+                  requestId:
+                      _isEnsemble ? widget.ensembleResult!.requestId : null,
+                  isMock: _isMock,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 _DisclaimerCard(text: _disclaimer),
@@ -182,13 +261,13 @@ class ResultScreen extends StatelessWidget {
                   const SizedBox(height: AppSpacing.sm),
                 ],
                 FilledButton.icon(
-                  onPressed: () => _runNew(context),
+                  onPressed: _runNew,
                   icon: const Icon(Icons.add_a_photo_outlined, size: 18),
                   label: const Text('New Analysis'),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 OutlinedButton.icon(
-                  onPressed: () => _openModels(context),
+                  onPressed: _openModels,
                   icon: const Icon(Icons.assessment_outlined, size: 18),
                   label: const Text('Model Performance'),
                 ),
@@ -401,12 +480,28 @@ class _SingleModelBadge extends StatelessWidget {
 // ── Image card ────────────────────────────────────────────────────────────────
 
 class _ImageCard extends StatelessWidget {
-  const _ImageCard({required this.image});
+  const _ImageCard({
+    required this.image,
+    this.camAvailable = false,
+    this.attentionOn = false,
+    this.heatmapBytes,
+    this.loading = false,
+    this.error,
+    this.onToggle,
+  });
 
   final SelectedImage image;
+  final bool camAvailable;
+  final bool attentionOn;
+  final Uint8List? heatmapBytes;
+  final bool loading;
+  final String? error;
+  final VoidCallback? onToggle;
 
   @override
   Widget build(BuildContext context) {
+    final showOverlay = attentionOn && heatmapBytes != null;
+
     return StandardCard(
       padding: EdgeInsets.zero,
       child: Column(
@@ -418,9 +513,101 @@ class _ImageCard extends StatelessWidget {
             ),
             child: AspectRatio(
               aspectRatio: 1.0,
-              child: Image.memory(image.bytes, fit: BoxFit.cover),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.memory(image.bytes, fit: BoxFit.cover),
+                  if (showOverlay)
+                    Image.memory(
+                      heatmapBytes!,
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
+                    ),
+                  if (loading)
+                    const ColoredBox(
+                      color: Color(0x66000000),
+                      child: Center(
+                        child: SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (camAvailable)
+                    Positioned(
+                      top: AppSpacing.sm,
+                      right: AppSpacing.sm,
+                      child: _AttentionToggle(
+                        on: attentionOn,
+                        loading: loading,
+                        onTap: onToggle,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
+          if (showOverlay)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.sm,
+                AppSpacing.md,
+                AppSpacing.sm,
+              ),
+              decoration: const BoxDecoration(
+                color: AppColors.surfaceMuted,
+                border: Border(
+                  top: BorderSide(color: AppColors.border),
+                ),
+              ),
+              child: const Text(
+                'Model attention (Grad-CAM). Highlights show where the '
+                'model concentrated its attention — not a clinical region '
+                'of interest.',
+                style: AppText.captionMuted,
+              ),
+            ),
+          if (error != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.sm,
+                AppSpacing.md,
+                AppSpacing.sm,
+              ),
+              decoration: const BoxDecoration(
+                color: AppColors.indetBg,
+                border: Border(
+                  top: BorderSide(color: AppColors.indetBorder),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    size: 13,
+                    color: AppColors.indetAccent,
+                  ),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      'Could not load attention overlay: $error',
+                      style: AppText.caption.copyWith(
+                        color: AppColors.indetText,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.md,
@@ -448,6 +635,58 @@ class _ImageCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AttentionToggle extends StatelessWidget {
+  const _AttentionToggle({
+    required this.on,
+    required this.loading,
+    required this.onTap,
+  });
+
+  final bool on;
+  final bool loading;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = on ? AppColors.brandPrimary : Colors.white.withValues(alpha: 0.92);
+    final fg = on ? Colors.white : AppColors.brandPrimaryDark;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        onTap: loading ? null : onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: Border.all(color: AppColors.borderStrong),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                on ? Icons.visibility : Icons.visibility_outlined,
+                size: 14,
+                color: fg,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                'Attention',
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

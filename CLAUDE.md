@@ -57,6 +57,9 @@ python -m src.skinlesion.evaluate \
 # docs/figures/calibration_<m>.png for the committed report)
 python -m src.skinlesion.calibrate --config configs/ham10000.yaml
 
+# Render Grad-CAM overlays for demo images (writes to docs/figures/cam_samples/)
+python -m src.skinlesion.cam_demo --all-demo
+
 # Generate report figures
 python -m src.skinlesion.report_assets --runs-dir runs --output-dir docs/figures
 
@@ -109,10 +112,13 @@ Loads ResNet50 (single-model path) and all four ensemble models at startup. Endp
 | GET | `/model-info` | Loaded model metadata |
 | POST | `/predict` | Single-model (ResNet50) → top-3 predictions |
 | POST | `/predict-ensemble` | All 4 models → weighted ensemble + per-model top-3 |
+| POST | `/predict-cam` | Single-model Grad-CAM overlay (base64 PNG) for the predicted class |
 
 `/predict` response is unchanged and Flutter-parser-compatible. `/predict-ensemble` adds `request_id`, `inference_time_ms`, `model_version`, `ensemble{}`, `model_outputs[]`, `models_agree`, `agreement_note`. Both endpoints expose a top-level `calibrated` flag (and per-model `calibrated` + `temperature` in the ensemble breakdown) — see `docs/calibration_report.md`. Ensemble weights are configured in `configs/ham10000.yaml` under `ensemble:`. CORS is enabled for all origins.
 
 At startup the API looks for `runs/<m>/calibration.json` next to each checkpoint. If present, the file's `temperature` scalar is applied to logits before softmax for that model (single-model and ensemble paths both honour this). If absent, the model runs uncalibrated and `calibrated` is false in the response — backwards-compatible fallback. Calibration files are produced by `src/skinlesion/calibrate.py` (Phase A1).
+
+`/predict-cam` (Phase B2) runs Grad-CAM (`src/skinlesion/cam.py`) on the deployed single-model checkpoint and returns a base64-encoded PNG overlay (224×224, viridis-blended). Per-architecture target layers live in `resolve_target_layer()`. CAM requests are serialised through an asyncio lock (`_CAM_LOCK`) because forward/backward hooks on the shared model layer would race under concurrent requests — acceptable for the demo, would need per-request model clones or batching for production.
 
 ### Flutter App (`mobile_app/lib/`)
 

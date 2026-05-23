@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import base64
 import os
 import time
 import uuid
@@ -7,13 +9,19 @@ from collections import Counter
 from io import BytesIO
 from pathlib import Path
 
+import numpy as np
 import torch
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
 
+from src.skinlesion.cam import (
+    grad_cam,
+    overlay_heatmap,
+    target_layer_name,
+)
 from src.skinlesion.config import load_config
-from src.skinlesion.data import build_transform
+from src.skinlesion.data import IMAGENET_MEAN, IMAGENET_STD, build_transform
 from src.skinlesion.ensemble import (
     LoadedModel,
     compute_ensemble,
@@ -53,6 +61,13 @@ SINGLE_CALIBRATION: dict | None = None
 ENSEMBLE_MODELS: dict[str, LoadedModel] = {}
 ENSEMBLE_VERSION: str = "ensemble-v1"
 ENSEMBLE_LOAD_ERRORS: list[str] = []
+
+# Grad-CAM requires a backward pass through the deployed model.
+# Forward/backward hooks registered on the shared model layer would
+# race if two CAM requests ran concurrently, so all /predict-cam work
+# is serialised through this lock. Acceptable for a single-user demo;
+# document as a known limitation in CLAUDE.md.
+_CAM_LOCK = asyncio.Lock()
 
 MODEL_PERFORMANCE = [
     {"model": "MobileNetV3 Small", "test_accuracy": 0.6776, "macro_f1": 0.5726},
@@ -381,4 +396,100 @@ async def predict_ensemble(image: UploadFile = File(...)) -> dict[str, object]:
         "agreement_note": agreement_note,
         "calibrated": all_calibrated,
         "disclaimer": "This result is for research-grade diagnostic-support purposes only and is not a medical diagnosis.",
+    }
+
+
+@app.post("/predict-cam")
+async def predict_cam(image: UploadFile = File(...)) -> dict[str, object]:
+    """Grad-CAM overlay for the single-model (ResNet50) path.
+
+    Returns a base64-encoded PNG of the colour-blended heatmap overlay
+    plus prediction metadata. The overlay is pre-rendered server-side so
+    Flutter just decodes and displays. Ensemble-mode CAMs are out of
+    scope for this phase (B3).
+    """
+    if MODEL is None or MODEL_NAME is None:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "model_unavailable",
+                "message": LOAD_ERROR or "Single-model checkpoint not loaded.",
+            },
+        )
+
+    contents = await image.read()
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "empty_file", "message": "Uploaded image file is empty."},
+        )
+
+    try:
+        pil_image = (
+            Image.open(BytesIO(contents))
+            .convert("RGB")
+            .resize((224, 224), Image.BILINEAR)
+        )
+        pil_image.load()
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_image", "message": "Uploaded file is not a valid image."},
+        ) from exc
+
+    # Display copy (un-normalised, for overlay blend) and model input.
+    rgb01 = np.asarray(pil_image, dtype=np.float32) / 255.0
+    mean = np.asarray(IMAGENET_MEAN, dtype=np.float32)
+    std = np.asarray(IMAGENET_STD, dtype=np.float32)
+    normalised = (rgb01 - mean) / std
+    tensor = (
+        torch.from_numpy(normalised)
+        .permute(2, 0, 1)
+        .unsqueeze(0)
+        .to(DEVICE, dtype=torch.float32)
+    )
+
+    try:
+        # Serialise: forward/backward hooks on the shared model layer race.
+        async with _CAM_LOCK:
+            with grad_cam(MODEL, MODEL_NAME) as cam:
+                heatmap, target_class, _ = cam.compute(tensor)
+            # Confidence (calibrated, matching /predict).
+            with torch.no_grad():
+                probs = (
+                    torch.softmax(MODEL(tensor) / SINGLE_TEMPERATURE, dim=1)
+                    .squeeze(0)
+                    .detach()
+                    .cpu()
+                )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "cam_failed", "message": str(exc)},
+        ) from exc
+
+    overlay = overlay_heatmap(rgb01, heatmap, alpha=0.45, colormap="viridis")
+    overlay_u8 = np.clip(overlay * 255.0, 0, 255).astype(np.uint8)
+    buf = BytesIO()
+    Image.fromarray(overlay_u8).save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+
+    predicted_label = CLASSES[target_class]
+    return {
+        "model": display_model_name(MODEL_NAME),
+        "checkpoint": MODEL_PATH,
+        "predicted_class": predicted_label,
+        "display_label": CLASS_DISPLAY_NAMES.get(predicted_label, predicted_label),
+        "confidence": float(probs[target_class]),
+        "calibrated": SINGLE_CALIBRATED,
+        "temperature": round(SINGLE_TEMPERATURE, 4),
+        "method": "grad-cam",
+        "target_layer": target_layer_name(MODEL_NAME),
+        "image_size": 224,
+        "heatmap_png_b64": b64,
+        "disclaimer": (
+            "Grad-CAM shows which image regions most influenced the model's "
+            "predicted class. It is not a clinical region of interest and "
+            "does not validate the prediction."
+        ),
     }

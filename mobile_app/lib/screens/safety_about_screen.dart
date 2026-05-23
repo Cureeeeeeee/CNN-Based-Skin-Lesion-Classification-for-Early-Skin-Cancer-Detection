@@ -33,6 +33,8 @@ class SafetyAboutScreen extends StatelessWidget {
             const _ModelsCard(),
             const SizedBox(height: AppSpacing.md),
             const _CalibrationCard(),
+            const SizedBox(height: AppSpacing.md),
+            const _AttentionCard(),
             const SizedBox(height: AppSpacing.lg),
             OutlinedButton.icon(
               onPressed: () => Navigator.of(context).push(
@@ -425,6 +427,53 @@ class _CalibrationCard extends StatelessWidget {
             'model-estimated confidence on the validation set. They are not '
             'clinical probabilities of disease and do not generalise to '
             'out-of-distribution images.',
+            style: AppText.captionMuted,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Model attention (Grad-CAM) ────────────────────────────────────────────────
+
+class _AttentionCard extends StatelessWidget {
+  const _AttentionCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const StandardCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeader(
+            label: 'Model Attention (Grad-CAM)',
+            icon: Icons.visibility_outlined,
+          ),
+          SizedBox(height: AppSpacing.sm),
+          Text(
+            'Single-model analyses expose an Attention toggle on the image '
+            'card. When enabled, the app fetches a Grad-CAM overlay from '
+            'the backend showing which image regions had the largest '
+            'influence on the model\'s predicted class.',
+            style: AppText.bodyMuted,
+          ),
+          SizedBox(height: AppSpacing.sm),
+          Text(
+            'Grad-CAM produces a class-discriminative localisation map: '
+            'it indicates which image regions had the largest influence on '
+            'the model\'s prediction. It does not identify the location of '
+            'pathology, does not validate the prediction, and does not '
+            'constitute a clinical annotation. A focused, sensible-looking '
+            'heatmap can still accompany a wrong prediction. Use it as a '
+            'debugging or exploration aid only.',
+            style: AppText.captionMuted,
+          ),
+          SizedBox(height: AppSpacing.sm),
+          Text(
+            'Currently available for the single-model (ResNet50) path only. '
+            'Ensemble-mode attention maps are not yet implemented. The '
+            'overlay is rendered server-side and decoded by the client.',
             style: AppText.captionMuted,
           ),
         ],
