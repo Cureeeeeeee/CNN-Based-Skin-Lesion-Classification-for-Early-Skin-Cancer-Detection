@@ -1,181 +1,496 @@
 import 'package:flutter/material.dart';
 
+import '../theme/tokens.dart';
+import '../widgets/cards.dart';
+import '../widgets/disclaimer_ribbon.dart';
+import '../widgets/risk.dart';
+
+/// Per-model and per-class performance on the HAM10000 held-out test split.
+/// Values are sourced from `runs/<model>/test_metrics.json`.
 class ModelComparisonScreen extends StatelessWidget {
   const ModelComparisonScreen({super.key});
 
-  static const models = [
-    ModelMetric('MobileNetV3 Small', 0.6776, 0.5726, false),
-    ModelMetric('EfficientNet-B0', 0.7745, 0.6477, false),
-    ModelMetric('DenseNet121', 0.7964, 0.6896, false),
-    ModelMetric('ResNet50', 0.8022, 0.6903, true),
+  static const _models = <_ModelMetric>[
+    _ModelMetric(
+      name: 'ResNet50',
+      shortCode: 'RN',
+      accuracy: 0.8022,
+      macroF1: 0.6903,
+      weight: 0.38,
+      isDefault: true,
+    ),
+    _ModelMetric(
+      name: 'DenseNet121',
+      shortCode: 'DN',
+      accuracy: 0.7964,
+      macroF1: 0.6896,
+      weight: 0.37,
+      isDefault: false,
+    ),
+    _ModelMetric(
+      name: 'EfficientNet-B0',
+      shortCode: 'EN',
+      accuracy: 0.7745,
+      macroF1: 0.6477,
+      weight: 0.20,
+      isDefault: false,
+    ),
+    _ModelMetric(
+      name: 'MobileNetV3 Small',
+      shortCode: 'MN',
+      accuracy: 0.6776,
+      macroF1: 0.5726,
+      weight: 0.05,
+      isDefault: false,
+    ),
+  ];
+
+  // Per-class recall per model, sourced from test_metrics.json.
+  // Order: RN, DN, EN, MN — matches _models order.
+  static const _perClassRecall = <_ClassRecall>[
+    _ClassRecall('mel', 'Melanoma', [0.548, 0.585, 0.574, 0.569]),
+    _ClassRecall('bcc', 'Basal cell carcinoma', [0.868, 0.846, 0.692, 0.868]),
+    _ClassRecall('akiec', 'Actinic / intraepithelial carcinoma',
+        [0.596, 0.596, 0.692, 0.577]),
+    _ClassRecall('bkl', 'Benign keratosis-like lesions',
+        [0.658, 0.749, 0.628, 0.472]),
+    _ClassRecall('df', 'Dermatofibroma', [0.800, 0.680, 0.720, 0.720]),
+    _ClassRecall('nv', 'Melanocytic nevi', [0.869, 0.843, 0.840, 0.712]),
+    _ClassRecall('vasc', 'Vascular lesions', [0.963, 0.963, 0.926, 1.000]),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Model Comparison')),
+      appBar: AppBar(title: const Text('Model Performance')),
       body: SafeArea(
+        bottom: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
-          children: [
-            const _DefaultModelSummary(),
-            const SizedBox(height: 14),
-            for (final model in models) _ModelMetricCard(metric: model),
-            const SizedBox(height: 2),
-            const _SelectionNote(),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.lg,
+            AppSpacing.lg,
+            AppSpacing.xxl,
+          ),
+          children: const [
+            _OverviewCard(),
+            SizedBox(height: AppSpacing.md),
+            _ModelSummaryCard(models: _models),
+            SizedBox(height: AppSpacing.md),
+            _PerClassRecallCard(
+              models: _models,
+              rows: _perClassRecall,
+            ),
+            SizedBox(height: AppSpacing.md),
+            _LimitationsCard(),
           ],
         ),
       ),
+      bottomNavigationBar: const DisclaimerRibbon(),
     );
   }
 }
 
-class ModelMetric {
-  const ModelMetric(
-    this.name,
-    this.testAccuracy,
-    this.macroF1,
-    this.isDefault,
-  );
+class _ModelMetric {
+  const _ModelMetric({
+    required this.name,
+    required this.shortCode,
+    required this.accuracy,
+    required this.macroF1,
+    required this.weight,
+    required this.isDefault,
+  });
 
   final String name;
-  final double testAccuracy;
+  final String shortCode;
+  final double accuracy;
   final double macroF1;
+  final double weight;
   final bool isDefault;
 }
 
-class _DefaultModelSummary extends StatelessWidget {
-  const _DefaultModelSummary();
+class _ClassRecall {
+  const _ClassRecall(this.code, this.displayName, this.values);
+  final String code;
+  final String displayName;
+  final List<double> values; // RN, DN, EN, MN
+}
+
+// ── Overview ──────────────────────────────────────────────────────────────────
+
+class _OverviewCard extends StatelessWidget {
+  const _OverviewCard();
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(
-                    Icons.verified_rounded,
-                    color: Color(0xFF2563EB),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'ResNet50 is the default deployment model.',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'The comparison uses the same held-out test set and reports test accuracy plus macro F1.',
-              style: TextStyle(color: Color(0xFF475569), height: 1.35),
-            ),
+    return const StandardCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeader(
+            label: 'Test Set Evaluation',
+            icon: Icons.science_outlined,
+          ),
+          SizedBox(height: AppSpacing.sm),
+          Text(
+            'All four CNN backbones were trained on HAM10000 and evaluated on '
+            'the same held-out test split (1,734 images). The 4-model ensemble '
+            'combines them by weighted average; weights are derived from '
+            'validation macro-F1 and per-class recall.',
+            style: AppText.bodyMuted,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Model summary table ───────────────────────────────────────────────────────
+
+class _ModelSummaryCard extends StatelessWidget {
+  const _ModelSummaryCard({required this.models});
+
+  final List<_ModelMetric> models;
+
+  @override
+  Widget build(BuildContext context) {
+    return StandardCard(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.sm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionHeader(
+            label: 'Model Summary',
+            icon: Icons.table_chart_outlined,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const _SummaryHeaderRow(),
+          const Divider(height: 1),
+          for (final m in models) ...[
+            _SummaryRow(metric: m),
+            const Divider(height: 1),
           ],
+          const SizedBox(height: AppSpacing.sm),
+          const Text(
+            'Acc = overall accuracy · F1 = macro F1 · Wt = ensemble weight',
+            style: AppText.captionMuted,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryHeaderRow extends StatelessWidget {
+  const _SummaryHeaderRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'Model',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textTertiary,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          _headerCell('ACC'),
+          _headerCell('F1'),
+          _headerCell('WT'),
+        ],
+      ),
+    );
+  }
+
+  Widget _headerCell(String label) {
+    return SizedBox(
+      width: 54,
+      child: Text(
+        label,
+        textAlign: TextAlign.right,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          color: AppColors.textTertiary,
+          letterSpacing: 0.5,
         ),
       ),
     );
   }
 }
 
-class _ModelMetricCard extends StatelessWidget {
-  const _ModelMetricCard({required this.metric});
+class _SummaryRow extends StatelessWidget {
+  const _SummaryRow({required this.metric});
 
-  final ModelMetric metric;
+  final _ModelMetric metric;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: Row(
+        children: [
+          Expanded(
+            child: Row(
               children: [
-                Expanded(
+                Flexible(
                   child: Text(
                     metric.name,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          color: const Color(0xFF1E293B),
-                        ),
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13.5,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 ),
-                if (metric.isDefault)
-                  const Chip(
-                    label: Text('Default'),
-                    avatar: Icon(Icons.star_rounded, size: 17),
+                if (metric.isDefault) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: AppColors.brandAccentSoft,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
+                    child: const Text(
+                      'default',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.brandPrimaryDark,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
                   ),
+                ],
               ],
             ),
-            const SizedBox(height: 14),
-            _MetricBar(
-              label: 'Test Accuracy',
-              value: metric.testAccuracy,
-            ),
-            const SizedBox(height: 12),
-            _MetricBar(
-              label: 'Macro F1',
-              value: metric.macroF1,
-            ),
-          ],
+          ),
+          _valueCell('${(metric.accuracy * 100).toStringAsFixed(1)}%'),
+          _valueCell('${(metric.macroF1 * 100).toStringAsFixed(1)}%'),
+          _valueCell('${(metric.weight * 100).toStringAsFixed(0)}%',
+              primary: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _valueCell(String text, {bool primary = false}) {
+    return SizedBox(
+      width: 54,
+      child: Text(
+        text,
+        textAlign: TextAlign.right,
+        style: AppText.mono.copyWith(
+          color: primary ? AppColors.brandPrimaryDark : AppColors.textPrimary,
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
         ),
       ),
     );
   }
 }
 
-class _MetricBar extends StatelessWidget {
-  const _MetricBar({required this.label, required this.value});
+// ── Per-class recall table ────────────────────────────────────────────────────
 
-  final String label;
+class _PerClassRecallCard extends StatelessWidget {
+  const _PerClassRecallCard({required this.models, required this.rows});
+
+  final List<_ModelMetric> models;
+  final List<_ClassRecall> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return StandardCard(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.sm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionHeader(
+            label: 'Per-Class Recall',
+            icon: Icons.percent_outlined,
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'How often the model identifies each class when it is present. '
+            'Lower recall = the system misses more cases of that class.',
+            style: AppText.captionMuted,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _RecallHeader(models: models),
+          const Divider(height: 1),
+          for (final row in rows) ...[
+            _RecallRow(row: row),
+            const Divider(height: 1),
+          ],
+          const SizedBox(height: AppSpacing.sm),
+          const Row(
+            children: [
+              Icon(Icons.warning_amber_outlined,
+                  size: 13, color: AppColors.indetAccent),
+              SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  'Values below 70% are flagged. Melanoma recall is the most '
+                  'clinically critical and remains below 60% across all models.',
+                  style: AppText.captionMuted,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecallHeader extends StatelessWidget {
+  const _RecallHeader({required this.models});
+
+  final List<_ModelMetric> models;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 48,
+            child: Text(
+              'CLASS',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textTertiary,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          for (final m in models)
+            Expanded(
+              child: Text(
+                m.shortCode,
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textTertiary,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecallRow extends StatelessWidget {
+  const _RecallRow({required this.row});
+
+  final _ClassRecall row;
+
+  @override
+  Widget build(BuildContext context) {
+    final risk = riskOf(row.code);
+    final p = riskPalette(risk);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 48,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: p.accent,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      row.code,
+                      style: AppText.mono.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              for (final v in row.values)
+                Expanded(
+                  child: _ValueWithFlag(value: v),
+                ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Padding(
+            padding: const EdgeInsets.only(left: 48),
+            child: Text(
+              row.displayName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.captionMuted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ValueWithFlag extends StatelessWidget {
+  const _ValueWithFlag({required this.value});
+
   final double value;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final flagged = value < 0.70;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  color: Color(0xFF475569),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            Text(
-              '${(value * 100).toStringAsFixed(2)}%',
-              style: const TextStyle(fontWeight: FontWeight.w900),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            minHeight: 9,
-            value: value,
-            backgroundColor: const Color(0xFFE2E8F0),
+        if (flagged)
+          const Icon(
+            Icons.warning_amber_outlined,
+            size: 11,
+            color: AppColors.indetAccent,
+          ),
+        if (flagged) const SizedBox(width: 3),
+        Text(
+          (value * 100).toStringAsFixed(0),
+          style: AppText.mono.copyWith(
+            color: flagged ? AppColors.indetText : AppColors.textPrimary,
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
           ),
         ),
       ],
@@ -183,29 +498,93 @@ class _MetricBar extends StatelessWidget {
   }
 }
 
-class _SelectionNote extends StatelessWidget {
-  const _SelectionNote();
+// ── Limitations ──────────────────────────────────────────────────────────────
+
+class _LimitationsCard extends StatelessWidget {
+  const _LimitationsCard();
+
+  static const _items = <String>[
+    'Melanoma recall is 54–59% across all four models. Roughly 4 in 10 '
+        'melanoma cases in the test set are misclassified. Do not rely on this '
+        'system to rule out melanoma.',
+    'HAM10000 contains predominantly Fitzpatrick skin types I–III. '
+        'Performance on darker skin tones is not characterised.',
+    'Phone-camera images differ optically from dermoscopic images and may '
+        'produce less reliable predictions.',
+    'The dataset is heavily skewed toward melanocytic nevi (nv). Rare '
+        'classes receive less training signal and have higher variance.',
+    'No external validation has been performed beyond the HAM10000 test '
+        'split. Generalisation to other populations or imaging conditions '
+        'is unknown.',
+  ];
 
   @override
   Widget build(BuildContext context) {
-    return const Card(
-      color: Color(0xFFEFF6FF),
-      child: Padding(
-        padding: EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.info_outline_rounded, color: Color(0xFF2563EB)),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'ResNet50 was selected because it achieved the best overall test accuracy and macro F1 among the tested CNN architectures.',
-                style: TextStyle(color: Color(0xFF1E3A8A), height: 1.35),
+    return StatusCard(
+      background: AppColors.safetyBg,
+      accent: AppColors.safetyAccent,
+      border: AppColors.safetyBorder,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.shield_outlined,
+                size: 18,
+                color: AppColors.safetyAccent,
               ),
-            ),
+              SizedBox(width: AppSpacing.sm),
+              Text(
+                'Known Limitations',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14.5,
+                  color: AppColors.safetyText,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final item in _items) ...[
+            _LimitationItem(text: item),
+            const SizedBox(height: 6),
           ],
-        ),
+        ],
       ),
+    );
+  }
+}
+
+class _LimitationItem extends StatelessWidget {
+  const _LimitationItem({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(top: 6, right: AppSpacing.sm),
+          child: Icon(
+            Icons.circle,
+            size: 5,
+            color: AppColors.safetyAccent,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: AppColors.safetyText,
+              fontSize: 12.5,
+              height: 1.45,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

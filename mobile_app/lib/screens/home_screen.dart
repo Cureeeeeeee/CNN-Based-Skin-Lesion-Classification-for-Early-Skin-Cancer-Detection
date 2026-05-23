@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models/selected_image.dart';
+import '../theme/tokens.dart';
+import '../widgets/cards.dart';
+import '../widgets/disclaimer_ribbon.dart';
 import 'classification_screen.dart';
-import 'model_comparison_screen.dart';
+import 'safety_about_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,32 +18,38 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final ImagePicker _picker = ImagePicker();
   SelectedImage? _selectedImage;
-  String? _message;
+  String? _pickerError;
 
   Future<void> _pickImage(ImageSource source) async {
     try {
       final file = await _picker.pickImage(source: source, imageQuality: 92);
       if (file == null) return;
       final bytes = await file.readAsBytes();
+      if (!mounted) return;
       setState(() {
         _selectedImage = SelectedImage(file: file, bytes: bytes);
-        _message = null;
+        _pickerError = null;
       });
     } catch (error) {
+      if (!mounted) return;
       setState(() {
-        _message = source == ImageSource.camera
-            ? 'Camera is unavailable in this environment. Please use Upload Image.'
-            : 'Image selection failed: $error';
+        _pickerError = source == ImageSource.camera
+            ? 'Camera unavailable in this environment. Use gallery instead.'
+            : 'Could not load image: $error';
       });
     }
   }
 
-  void _openClassification() {
+  void _clearImage() {
+    setState(() {
+      _selectedImage = null;
+      _pickerError = null;
+    });
+  }
+
+  void _continue() {
     final image = _selectedImage;
-    if (image == null) {
-      setState(() => _message = 'Please select an image first.');
-      return;
-    }
+    if (image == null) return;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ClassificationScreen(selectedImage: image),
@@ -48,238 +57,238 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openAbout() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SafetyAboutScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Skin Lesion Classification'),
+        title: const Text('Skin Lesion Analysis'),
         actions: [
           IconButton(
-            tooltip: 'Model comparison',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ModelComparisonScreen()),
-            ),
-            icon: const Icon(Icons.bar_chart_rounded),
+            tooltip: 'About this system',
+            icon: const Icon(Icons.info_outline),
+            onPressed: _openAbout,
           ),
         ],
       ),
       body: SafeArea(
+        bottom: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.xl,
+            AppSpacing.lg,
+            AppSpacing.xxl,
+          ),
           children: [
-            const _IntroHeader(),
-            const SizedBox(height: 18),
+            const _SystemIdentity(),
+            const SizedBox(height: AppSpacing.xl),
+            const _ScopeCard(),
+            const SizedBox(height: AppSpacing.md),
+            _ImageSourceCard(
+              image: _selectedImage,
+              onCamera: () => _pickImage(ImageSource.camera),
+              onGallery: () => _pickImage(ImageSource.gallery),
+              onClear: _clearImage,
+              error: _pickerError,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            FilledButton(
+              onPressed: _selectedImage == null ? null : _continue,
+              child: const Text('Continue to Analysis'),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: const DisclaimerRibbon(),
+    );
+  }
+}
+
+class _SystemIdentity extends StatelessWidget {
+  const _SystemIdentity();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: AppColors.brandAccentSoft,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: const Icon(
+            Icons.biotech_outlined,
+            color: AppColors.brandPrimary,
+            size: 24,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Research-Grade Diagnostic-Support Prototype',
+                style: AppText.title,
+              ),
+              SizedBox(height: 4),
+              Text(
+                '4-model ensemble · HAM10000 · v1.0',
+                style: AppText.mono,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ScopeCard extends StatelessWidget {
+  const _ScopeCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const StandardCard(
+      child: Text(
+        'This prototype uses deep-learning models trained on dermoscopy '
+        'images to suggest possible lesion categories. Results are intended '
+        'to support clinical and research review — not to provide a '
+        'diagnosis or replace evaluation by a qualified healthcare '
+        'professional.',
+        style: AppText.body,
+      ),
+    );
+  }
+}
+
+class _ImageSourceCard extends StatelessWidget {
+  const _ImageSourceCard({
+    required this.image,
+    required this.onCamera,
+    required this.onGallery,
+    required this.onClear,
+    required this.error,
+  });
+
+  final SelectedImage? image;
+  final VoidCallback onCamera;
+  final VoidCallback onGallery;
+  final VoidCallback onClear;
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) {
+    return StandardCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionHeader(
+            label: 'Load Lesion Image',
+            icon: Icons.image_outlined,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AspectRatio(
+            aspectRatio: 1.0,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              child: image == null
+                  ? const _EmptyImagePlaceholder()
+                  : Image.memory(image!.bytes, fit: BoxFit.cover),
+            ),
+          ),
+          if (image != null) ...[
+            const SizedBox(height: AppSpacing.sm),
             Row(
               children: [
-                Expanded(
-                  child: _ActionTile(
-                    icon: Icons.photo_camera_rounded,
-                    label: 'Take Photo',
-                    onTap: () => _pickImage(ImageSource.camera),
-                  ),
+                const Icon(
+                  Icons.insert_drive_file_outlined,
+                  size: 14,
+                  color: AppColors.textTertiary,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 5),
                 Expanded(
-                  child: _ActionTile(
-                    icon: Icons.image_rounded,
-                    label: 'Upload Image',
-                    onTap: () => _pickImage(ImageSource.gallery),
+                  child: Text(
+                    image!.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.mono,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 18),
-            _ImagePreviewCard(selectedImage: _selectedImage),
-            const SizedBox(height: 14),
-            FilledButton.icon(
-              onPressed: _openClassification,
-              icon: const Icon(Icons.analytics_outlined),
-              label: const Text('Analyze'),
-            ),
-            if (_message != null) ...[
-              const SizedBox(height: 12),
-              _InfoCard(message: _message!),
-            ],
-            const SizedBox(height: 14),
-            const _DisclaimerCard(),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _IntroHeader extends StatelessWidget {
-  const _IntroHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: 54,
-              height: 54,
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: const Icon(
-                Icons.health_and_safety_rounded,
-                color: Color(0xFF2563EB),
-                size: 30,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              'Skin Lesion Classification',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF0F172A),
+          const SizedBox(height: AppSpacing.md),
+          if (image == null)
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onCamera,
+                    icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                    label: const Text('Camera'),
                   ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'AI-based skin lesion screening support',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Color(0xFF475569),
-                fontSize: 15,
-                height: 1.35,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onGallery,
+                    icon: const Icon(Icons.collections_outlined, size: 18),
+                    label: const Text('Gallery'),
+                  ),
+                ),
+              ],
+            )
+          else
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: onClear,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Change image'),
               ),
             ),
-            const SizedBox(height: 10),
-            const Text(
-              'For educational demonstration only. This is not a medical diagnosis.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Color(0xFF64748B),
-                fontSize: 12.5,
-                height: 1.35,
-              ),
-            ),
+          if (error != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _InlineMessage(message: error!),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ActionTile extends StatelessWidget {
-  const _ActionTile({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0xFF2563EB),
-      borderRadius: BorderRadius.circular(14),
-      elevation: 2,
-      shadowColor: const Color(0x332563EB),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.white, size: 30),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ImagePreviewCard extends StatelessWidget {
-  const _ImagePreviewCard({required this.selectedImage});
-
-  final SelectedImage? selectedImage;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 14, 16, 10),
-            child: Text(
-              'Selected Image',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF1E293B),
-              ),
-            ),
-          ),
-          AspectRatio(
-            aspectRatio: 1.18,
-            child: selectedImage == null
-                ? const _EmptyImageState()
-                : Image.memory(selectedImage!.bytes, fit: BoxFit.cover),
-          ),
-          if (selectedImage != null)
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                selectedImage!.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xFF64748B),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
         ],
       ),
     );
   }
 }
 
-class _EmptyImageState extends StatelessWidget {
-  const _EmptyImageState();
+class _EmptyImagePlaceholder extends StatelessWidget {
+  const _EmptyImagePlaceholder();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFF8FAFC),
+      color: AppColors.surfaceMuted,
       child: const Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.image_search_rounded,
-              size: 52,
-              color: Color(0xFF93A4B8),
+              Icons.image_search_outlined,
+              size: 36,
+              color: AppColors.textTertiary,
             ),
-            SizedBox(height: 10),
+            SizedBox(height: AppSpacing.sm),
             Text(
-              'No image selected',
-              style: TextStyle(color: Color(0xFF64748B)),
+              'No image loaded',
+              style: AppText.captionMuted,
             ),
           ],
         ),
@@ -288,51 +297,39 @@ class _EmptyImageState extends StatelessWidget {
   }
 }
 
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.message});
+class _InlineMessage extends StatelessWidget {
+  const _InlineMessage({required this.message});
 
   final String message;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: const Color(0xFFEFF6FF),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            const Icon(Icons.info_outline, color: Color(0xFF2563EB)),
-            const SizedBox(width: 10),
-            Expanded(child: Text(message)),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
       ),
-    );
-  }
-}
-
-class _DisclaimerCard extends StatelessWidget {
-  const _DisclaimerCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Card(
-      color: Color(0xFFFFFBEB),
-      child: Padding(
-        padding: EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706)),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'This app is not a medical diagnosis tool. Please consult a healthcare professional for clinical evaluation.',
-                style: TextStyle(color: Color(0xFF92400E), height: 1.35),
-              ),
+      decoration: BoxDecoration(
+        color: AppColors.indetBg,
+        border: Border.all(color: AppColors.indetBorder),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.error_outline,
+            size: 16,
+            color: AppColors.indetAccent,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              message,
+              style: AppText.caption.copyWith(color: AppColors.indetText),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
