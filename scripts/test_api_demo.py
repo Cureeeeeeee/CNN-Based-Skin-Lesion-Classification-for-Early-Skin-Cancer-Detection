@@ -73,12 +73,27 @@ def main() -> None:
     print(f"Project: {root.get('project')}")
     print(f"Health: {health.get('status')} | loaded={health.get('model_loaded')}")
     print(f"Default model: {model_info.get('default_model')}")
+    cal_block = model_info.get("calibration", {}) or {}
+    single_cal = cal_block.get("single", {}) or {}
+    ens_cal = cal_block.get("ensemble", {}) or {}
+    print(
+        "Calibration: single "
+        f"{'on' if single_cal.get('calibrated') else 'off'} "
+        f"T={single_cal.get('temperature')} | ensemble "
+        f"{'all-on' if ens_cal.get('all_calibrated') else 'partial/off'}"
+    )
     print("Top-3 predictions:")
     for index, item in enumerate(predictions, start=1):
         label = item.get("label") or item.get("class")
         display_label = item.get("display_label") or label
         confidence = float(item["confidence"])
         print(f"  {index}. {label} - {display_label}: {confidence:.2%}")
+    if "calibrated" not in prediction:
+        raise AssertionError("/predict response missing 'calibrated' flag")
+    print(
+        f"  /predict calibrated={prediction.get('calibrated')} "
+        f"T={prediction.get('temperature')}"
+    )
 
     ensemble = post_image(f"{base_url}/predict-ensemble", image_path)
     ens = ensemble.get("ensemble", {})
@@ -88,18 +103,28 @@ def main() -> None:
     if len(model_outputs) == 0:
         raise AssertionError("Ensemble response has no model_outputs")
 
+    if "calibrated" not in ensemble:
+        raise AssertionError("/predict-ensemble response missing 'calibrated' flag")
+
     print()
     print("Ensemble validation passed")
     print(f"  request_id:        {ensemble.get('request_id')}")
     print(f"  inference_time_ms: {ensemble.get('inference_time_ms')}")
     print(f"  model_version:     {ensemble.get('model_version')}")
     print(f"  models_agree:      {ensemble.get('models_agree')}")
+    print(f"  calibrated:        {ensemble.get('calibrated')}")
     if ensemble.get("agreement_note"):
         print(f"  note:              {ensemble.get('agreement_note')}")
     print(f"  Ensemble top-1:    {ens.get('predicted_class')} - {ens.get('display_label')} ({ens.get('confidence'):.2%})")
     print("  Per-model top-1:")
     for m in model_outputs:
-        print(f"    {m['model']:22s} (w={m['weight']:.2f})  {m['predicted_class']:5s}  {m['confidence']:.2%}")
+        cal = "cal" if m.get("calibrated") else "raw"
+        temp = m.get("temperature", 1.0)
+        print(
+            f"    {m['model']:22s} (w={m['weight']:.2f})  "
+            f"{m['predicted_class']:5s}  {m['confidence']:.2%}  "
+            f"[{cal} T={temp}]"
+        )
 
 
 if __name__ == "__main__":

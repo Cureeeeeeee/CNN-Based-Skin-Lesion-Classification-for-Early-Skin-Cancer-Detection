@@ -52,6 +52,11 @@ python -m src.skinlesion.evaluate \
   --config configs/ham10000.yaml --model resnet50 \
   --checkpoint runs/resnet50/best.pt --split test
 
+# Fit post-hoc temperature calibration for every model in the config
+# (writes runs/<m>/calibration.json + reliability.png locally and
+# docs/figures/calibration_<m>.png for the committed report)
+python -m src.skinlesion.calibrate --config configs/ham10000.yaml
+
 # Generate report figures
 python -m src.skinlesion.report_assets --runs-dir runs --output-dir docs/figures
 
@@ -105,7 +110,9 @@ Loads ResNet50 (single-model path) and all four ensemble models at startup. Endp
 | POST | `/predict` | Single-model (ResNet50) → top-3 predictions |
 | POST | `/predict-ensemble` | All 4 models → weighted ensemble + per-model top-3 |
 
-`/predict` response is unchanged and Flutter-parser-compatible. `/predict-ensemble` adds `request_id`, `inference_time_ms`, `model_version`, `ensemble{}`, `model_outputs[]`, `models_agree`, `agreement_note`. Ensemble weights are configured in `configs/ham10000.yaml` under `ensemble:`. CORS is enabled for all origins.
+`/predict` response is unchanged and Flutter-parser-compatible. `/predict-ensemble` adds `request_id`, `inference_time_ms`, `model_version`, `ensemble{}`, `model_outputs[]`, `models_agree`, `agreement_note`. Both endpoints expose a top-level `calibrated` flag (and per-model `calibrated` + `temperature` in the ensemble breakdown) — see `docs/calibration_report.md`. Ensemble weights are configured in `configs/ham10000.yaml` under `ensemble:`. CORS is enabled for all origins.
+
+At startup the API looks for `runs/<m>/calibration.json` next to each checkpoint. If present, the file's `temperature` scalar is applied to logits before softmax for that model (single-model and ensemble paths both honour this). If absent, the model runs uncalibrated and `calibrated` is false in the response — backwards-compatible fallback. Calibration files are produced by `src/skinlesion/calibrate.py` (Phase A1).
 
 ### Flutter App (`mobile_app/lib/`)
 
@@ -140,7 +147,7 @@ ResNet50 is the default deployed model.
 
 ## Key Constraints
 
-- `data/raw/`, `data/processed/`, and `runs/` are gitignored — model checkpoints and datasets are not in the repo. The demo requires `runs/resnet50/best.pt` to exist locally.
+- `data/raw/`, `data/processed/`, and `runs/` are gitignored — model checkpoints and datasets are not in the repo. The demo requires `runs/resnet50/best.pt` to exist locally. Calibration artefacts (`runs/<m>/calibration.json`, `runs/<m>/reliability.png`) are similarly gitignored; the committed canonical reliability figures live in `docs/figures/calibration_<m>.png`.
 - `num_workers: 0` in the config is intentional for Windows compatibility (multiprocessing issues with DataLoader on Windows).
 - The project targets Windows (PowerShell commands in docs, OneDrive-compatible paths).
 - `timm` model name for MobileNetV3 is `mobilenetv3_small_100` (not `mobilenet_v3_small`).

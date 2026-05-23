@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import torch
@@ -18,6 +19,13 @@ class LoadedModel:
     classes: list[str]
     transform: object
     weight: float
+    # ── Calibration (post-hoc temperature scaling, see Phase A1 report) ──
+    # If a runs/<name>/calibration.json file is present next to the
+    # checkpoint, the API attaches its scalar temperature here. Default 1.0
+    # leaves softmax unchanged — the model behaves as uncalibrated.
+    temperature: float = 1.0
+    calibrated: bool = False
+    calibration_metadata: dict | None = field(default=None)
 
 
 _DISPLAY_NAMES: dict[str, str] = {
@@ -26,6 +34,25 @@ _DISPLAY_NAMES: dict[str, str] = {
     "efficientnet_b0": "EfficientNet-B0",
     "mobilenetv3_small_100": "MobileNetV3 Small",
 }
+
+
+def load_calibration(checkpoint_path: Path) -> tuple[float, dict | None]:
+    """Look for `calibration.json` alongside the checkpoint.
+
+    Returns (temperature, metadata). If no file is present or it is
+    malformed, returns (1.0, None) — the model runs uncalibrated.
+    """
+    candidate = checkpoint_path.parent / "calibration.json"
+    if not candidate.exists():
+        return 1.0, None
+    try:
+        data = json.loads(candidate.read_text(encoding="utf-8"))
+        t = float(data["temperature"])
+        if t <= 0:
+            raise ValueError(f"temperature must be > 0, got {t}")
+        return t, data
+    except (OSError, ValueError, KeyError, json.JSONDecodeError):
+        return 1.0, None
 
 
 def load_ensemble(
@@ -49,6 +76,7 @@ def load_ensemble(
             model = create_model(stored_name, num_classes=len(classes), pretrained=False).to(device)
             model.load_state_dict(ck["state_dict"])
             model.eval()
+            temperature, cal_meta = load_calibration(path)
             loaded[model_name] = LoadedModel(
                 name=model_name,
                 display_name=_DISPLAY_NAMES.get(model_name, model_name),
@@ -56,6 +84,9 @@ def load_ensemble(
                 classes=classes,
                 transform=build_transform(split="test", image_size=image_size),
                 weight=weights.get(model_name, 0.0),
+                temperature=temperature,
+                calibrated=cal_meta is not None,
+                calibration_metadata=cal_meta,
             )
         except Exception as exc:
             errors.append(f"{model_name}: load failed — {exc}")
@@ -67,9 +98,15 @@ def run_inference_single(
     image_tensor: torch.Tensor,
     top_k: int = 3,
 ) -> tuple[list[float], list[dict[str, object]]]:
-    """Run one model. Returns (full_prob_vector, top_k_predictions)."""
+    """Run one model. Returns (full_prob_vector, top_k_predictions).
+
+    Applies the model's temperature scaling before softmax. If the model
+    has no calibration file, temperature is 1.0 and behaviour matches
+    uncalibrated softmax exactly.
+    """
     with torch.no_grad():
-        probs = torch.softmax(loaded.model(image_tensor), dim=1).squeeze(0).detach().cpu()
+        logits = loaded.model(image_tensor)
+        probs = torch.softmax(logits / loaded.temperature, dim=1).squeeze(0).detach().cpu()
     k = min(top_k, len(loaded.classes))
     confidences, indices = torch.topk(probs, k=k)
     top_k_list = [

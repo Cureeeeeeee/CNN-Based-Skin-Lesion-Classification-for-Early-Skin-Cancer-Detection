@@ -31,6 +31,8 @@ class SafetyAboutScreen extends StatelessWidget {
             const _DatasetCard(),
             const SizedBox(height: AppSpacing.md),
             const _ModelsCard(),
+            const SizedBox(height: AppSpacing.md),
+            const _CalibrationCard(),
             const SizedBox(height: AppSpacing.lg),
             OutlinedButton.icon(
               onPressed: () => Navigator.of(context).push(
@@ -346,10 +348,10 @@ class _ModelsCard extends StatelessWidget {
             style: AppText.bodyMuted,
           ),
           const SizedBox(height: AppSpacing.md),
-          _modelRow('ResNet50', 'weight 0.38 · default single-model'),
-          _modelRow('DenseNet121', 'weight 0.37 · strongest melanoma recall'),
-          _modelRow('EfficientNet-B0', 'weight 0.20 · strongest akiec recall'),
-          _modelRow('MobileNetV3 Small', 'weight 0.05 · low-cost backbone'),
+          _modelRow('ResNet50', 'weight 0.38 · default single-model · T=1.539'),
+          _modelRow('DenseNet121', 'weight 0.37 · strongest melanoma recall · T=1.689'),
+          _modelRow('EfficientNet-B0', 'weight 0.20 · strongest akiec recall · T=2.027'),
+          _modelRow('MobileNetV3 Small', 'weight 0.05 · low-cost backbone · T=1.655'),
         ],
       ),
     );
@@ -390,3 +392,44 @@ class _ModelsCard extends StatelessWidget {
     );
   }
 }
+
+// ── Calibration ───────────────────────────────────────────────────────────────
+
+class _CalibrationCard extends StatelessWidget {
+  const _CalibrationCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const StandardCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeader(
+            label: 'Confidence Calibration',
+            icon: Icons.thermostat_outlined,
+          ),
+          SizedBox(height: AppSpacing.sm),
+          Text(
+            "Each model's logits are divided by a fitted scalar "
+            'temperature before softmax. The temperatures are fit on the '
+            'HAM10000 validation split to minimise negative log-likelihood. '
+            'The T values shown above in the Models section are the fitted '
+            'temperatures; all models were overconfident (T > 1) before '
+            'calibration. Top-1 predictions are unchanged — calibration '
+            'only reshapes the confidence distribution.',
+            style: AppText.bodyMuted,
+          ),
+          SizedBox(height: AppSpacing.sm),
+          Text(
+            'Confidence values shown by this app are temperature-calibrated '
+            'model-estimated confidence on the validation set. They are not '
+            'clinical probabilities of disease and do not generalise to '
+            'out-of-distribution images.',
+            style: AppText.captionMuted,
+          ),
+        ],
+      ),
+    );
+  }
+}
+

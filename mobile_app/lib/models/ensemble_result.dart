@@ -8,6 +8,8 @@ class ModelPrediction {
     required this.displayLabel,
     required this.confidence,
     required this.topCandidates,
+    this.calibrated = false,
+    this.temperature = 1.0,
   });
 
   final String model;
@@ -16,6 +18,8 @@ class ModelPrediction {
   final String displayLabel;
   final double confidence;
   final List<PredictionCandidate> topCandidates;
+  final bool calibrated;
+  final double temperature;
 
   factory ModelPrediction.fromJson(Map<String, dynamic> json) {
     final rawList = json['predictions'] as List<dynamic>;
@@ -29,6 +33,8 @@ class ModelPrediction {
       topCandidates: rawList
           .map((e) => PredictionCandidate.fromJson(e as Map<String, dynamic>))
           .toList(),
+      calibrated: (json['calibrated'] as bool?) ?? false,
+      temperature: (json['temperature'] as num?)?.toDouble() ?? 1.0,
     );
   }
 }
@@ -46,6 +52,7 @@ class EnsembleResult {
     required this.modelsAgree,
     this.agreementNote,
     required this.disclaimer,
+    this.calibrated = false,
   });
 
   final String requestId;
@@ -59,6 +66,9 @@ class EnsembleResult {
   final bool modelsAgree;
   final String? agreementNote;
   final String disclaimer;
+  // True when every loaded model in the ensemble has post-hoc temperature
+  // calibration applied (see docs/calibration_report.md).
+  final bool calibrated;
 
   factory EnsembleResult.fromJson(Map<String, dynamic> json) {
     final ens = json['ensemble'] as Map<String, dynamic>;
@@ -87,6 +97,7 @@ class EnsembleResult {
       disclaimer: (json['disclaimer'] as String?) ??
           'This result is for research-grade diagnostic-support purposes only'
               ' and is not a medical diagnosis.',
+      calibrated: (json['calibrated'] as bool?) ?? false,
     );
   }
 
@@ -111,6 +122,7 @@ class EnsembleResult {
           displayLabel: 'Melanocytic nevi',
           confidence: 0.052),
     ],
+    calibrated: true,
     modelOutputs: [
       ModelPrediction(
         model: 'ResNet50',
@@ -118,6 +130,8 @@ class EnsembleResult {
         predictedClass: 'mel',
         displayLabel: 'Melanoma',
         confidence: 0.784,
+        calibrated: true,
+        temperature: 1.539,
         topCandidates: [
           PredictionCandidate(
               className: 'mel',
@@ -139,6 +153,8 @@ class EnsembleResult {
         predictedClass: 'mel',
         displayLabel: 'Melanoma',
         confidence: 0.701,
+        calibrated: true,
+        temperature: 1.689,
         topCandidates: [
           PredictionCandidate(
               className: 'mel',
@@ -160,6 +176,8 @@ class EnsembleResult {
         predictedClass: 'bcc',
         displayLabel: 'Basal cell carcinoma',
         confidence: 0.612,
+        calibrated: true,
+        temperature: 2.027,
         topCandidates: [
           PredictionCandidate(
               className: 'bcc',
@@ -182,6 +200,8 @@ class EnsembleResult {
         predictedClass: 'mel',
         displayLabel: 'Melanoma',
         confidence: 0.543,
+        calibrated: true,
+        temperature: 1.655,
         topCandidates: [
           PredictionCandidate(
               className: 'mel',

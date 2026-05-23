@@ -53,6 +53,11 @@ class ResultScreen extends StatelessWidget {
 
   bool get _modelsAgree => _isEnsemble ? _ensemble!.modelsAgree : true;
 
+  /// True when the backend applied post-hoc temperature calibration. For
+  /// ensembles this requires every loaded model to have a calibration file.
+  bool get _calibrated =>
+      _isEnsemble ? _ensemble!.calibrated : _single!.calibrated;
+
   /// Effective risk: disagreement (or indeterminate class) outranks the
   /// raw class-based risk. A disagreeing ensemble is uncertain by definition,
   /// regardless of what its top class would otherwise indicate.
@@ -110,6 +115,7 @@ class ResultScreen extends StatelessWidget {
             label: modeLabel,
             version: version,
             trailing: trailing,
+            calibrated: _calibrated,
           ),
           Expanded(
             child: ListView(
@@ -134,6 +140,7 @@ class ResultScreen extends StatelessWidget {
                           .where((m) => m.predictedClass == _topClass)
                           .length
                       : 1,
+                  calibrated: _calibrated,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 _ImageCard(image: selectedImage),
@@ -208,6 +215,7 @@ class _RiskHero extends StatelessWidget {
     required this.modelsAgree,
     required this.modelCount,
     required this.agreeCount,
+    required this.calibrated,
   });
 
   final String eyebrow;
@@ -219,6 +227,7 @@ class _RiskHero extends StatelessWidget {
   final bool modelsAgree;
   final int modelCount;
   final int agreeCount;
+  final bool calibrated;
 
   @override
   Widget build(BuildContext context) {
@@ -300,8 +309,11 @@ class _RiskHero extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
-            'Confidence reflects model certainty, not the probability '
-            'of a correct diagnosis.',
+            calibrated
+                ? 'Temperature-calibrated model-estimated confidence on '
+                    'the validation set. Not a probability of disease.'
+                : 'Confidence reflects model certainty, not the probability '
+                    'of a correct diagnosis.',
             style: AppText.caption.copyWith(
               color: p.text.withValues(alpha: 0.75),
               fontStyle: FontStyle.italic,

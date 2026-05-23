@@ -14,12 +14,14 @@ class MetadataStrip extends StatelessWidget {
     required this.label,
     this.version,
     this.trailing,
+    this.calibrated = false,
   });
 
   final IconData leadingIcon;
   final String label;
   final String? version;
   final String? trailing;
+  final bool calibrated;
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +64,25 @@ class MetadataStrip extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppText.mono.copyWith(color: AppColors.textTertiary),
+              ),
+            ),
+          ],
+          if (calibrated) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: AppColors.brandAccentSoft,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: const Text(
+                'calibrated',
+                style: TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.brandPrimaryDark,
+                  letterSpacing: 0.4,
+                ),
               ),
             ),
           ],

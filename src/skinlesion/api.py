@@ -14,7 +14,13 @@ from PIL import Image, UnidentifiedImageError
 
 from src.skinlesion.config import load_config
 from src.skinlesion.data import build_transform
-from src.skinlesion.ensemble import LoadedModel, compute_ensemble, load_ensemble, run_inference_single
+from src.skinlesion.ensemble import (
+    LoadedModel,
+    compute_ensemble,
+    load_calibration,
+    load_ensemble,
+    run_inference_single,
+)
 from src.skinlesion.models import create_model
 from src.skinlesion.train import select_device
 
@@ -36,6 +42,13 @@ MODEL_NAME = None
 CLASSES: list[str] = []
 TRANSFORM = None
 LOAD_ERROR: str | None = None
+# Post-hoc calibration for the single-model /predict path. Mirrors the
+# per-model fields on LoadedModel for the ensemble path. Defaults match
+# "uncalibrated" so the API is backwards-compatible if no calibration
+# file is present alongside the checkpoint.
+SINGLE_TEMPERATURE: float = 1.0
+SINGLE_CALIBRATED: bool = False
+SINGLE_CALIBRATION: dict | None = None
 
 ENSEMBLE_MODELS: dict[str, LoadedModel] = {}
 ENSEMBLE_VERSION: str = "ensemble-v1"
@@ -85,6 +98,7 @@ def root() -> dict[str, object]:
 @app.on_event("startup")
 def load_model() -> None:
     global MODEL, MODEL_NAME, CLASSES, TRANSFORM, LOAD_ERROR
+    global SINGLE_TEMPERATURE, SINGLE_CALIBRATED, SINGLE_CALIBRATION
     checkpoint_path = Path(MODEL_PATH)
     if not checkpoint_path.exists():
         LOAD_ERROR = f"Checkpoint not found: {MODEL_PATH}"
@@ -104,12 +118,18 @@ def load_model() -> None:
         MODEL.load_state_dict(checkpoint["state_dict"])
         MODEL.eval()
         LOAD_ERROR = None
+        # Pick up post-hoc calibration if it has been fit (Phase A1).
+        SINGLE_TEMPERATURE, SINGLE_CALIBRATION = load_calibration(checkpoint_path)
+        SINGLE_CALIBRATED = SINGLE_CALIBRATION is not None
     except Exception as exc:
         MODEL = None
         MODEL_NAME = None
         CLASSES = []
         TRANSFORM = None
         LOAD_ERROR = f"Model loading failed: {exc}"
+        SINGLE_TEMPERATURE = 1.0
+        SINGLE_CALIBRATED = False
+        SINGLE_CALIBRATION = None
 
 
 @app.on_event("startup")
@@ -141,6 +161,17 @@ def health() -> dict[str, object]:
 
 @app.get("/model-info")
 def model_info() -> dict[str, object]:
+    ensemble_calibration = [
+        {
+            "model": loaded.display_name,
+            "calibrated": loaded.calibrated,
+            "temperature": round(loaded.temperature, 4),
+        }
+        for loaded in ENSEMBLE_MODELS.values()
+    ]
+    all_ensemble_calibrated = bool(ENSEMBLE_MODELS) and all(
+        m.calibrated for m in ENSEMBLE_MODELS.values()
+    )
     return {
         "default_model": "ResNet50",
         "loaded_model": display_model_name(MODEL_NAME),
@@ -150,6 +181,18 @@ def model_info() -> dict[str, object]:
         "class_display_names": CLASS_DISPLAY_NAMES,
         "performance": MODEL_PERFORMANCE,
         "selection_reason": "ResNet50 achieved the best initial test accuracy and macro F1-score.",
+        "calibration": {
+            "single": {
+                "calibrated": SINGLE_CALIBRATED,
+                "temperature": round(SINGLE_TEMPERATURE, 4),
+                "method": (SINGLE_CALIBRATION or {}).get("method"),
+                "fit_split": (SINGLE_CALIBRATION or {}).get("split"),
+            },
+            "ensemble": {
+                "all_calibrated": all_ensemble_calibrated,
+                "per_model": ensemble_calibration,
+            },
+        },
         "disclaimer": "This result is for educational demonstration only and is not a medical diagnosis.",
     }
 
@@ -184,7 +227,13 @@ async def predict(image: UploadFile = File(...)) -> dict[str, object]:
     try:
         tensor = TRANSFORM(pil_image).unsqueeze(0).to(DEVICE)
         with torch.no_grad():
-            probabilities = torch.softmax(MODEL(tensor), dim=1).squeeze(0).detach().cpu()
+            logits = MODEL(tensor)
+            probabilities = (
+                torch.softmax(logits / SINGLE_TEMPERATURE, dim=1)
+                .squeeze(0)
+                .detach()
+                .cpu()
+            )
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -217,6 +266,8 @@ async def predict(image: UploadFile = File(...)) -> dict[str, object]:
         "confidence": predictions[0]["confidence"],
         "predictions": predictions,
         "top_candidates": top_candidates,
+        "calibrated": SINGLE_CALIBRATED,
+        "temperature": round(SINGLE_TEMPERATURE, 4),
         "disclaimer": "This result is for educational demonstration only and is not a medical diagnosis.",
     }
 
@@ -270,6 +321,8 @@ async def predict_ensemble(image: UploadFile = File(...)) -> dict[str, object]:
                 "predicted_class": top_k[0]["label"],
                 "display_label": CLASS_DISPLAY_NAMES.get(top_k[0]["label"], top_k[0]["label"]),
                 "confidence": top_k[0]["confidence"],
+                "calibrated": loaded.calibrated,
+                "temperature": round(loaded.temperature, 4),
                 "predictions": [
                     {
                         "label": p["label"],
@@ -309,6 +362,10 @@ async def predict_ensemble(image: UploadFile = File(...)) -> dict[str, object]:
         ]
         agreement_note = "Models disagree. Top predictions: " + ", ".join(parts)
 
+    all_calibrated = bool(ENSEMBLE_MODELS) and all(
+        m.calibrated for m in ENSEMBLE_MODELS.values()
+    )
+
     return {
         "request_id": request_id,
         "inference_time_ms": inference_time_ms,
@@ -322,5 +379,6 @@ async def predict_ensemble(image: UploadFile = File(...)) -> dict[str, object]:
         "model_outputs": per_model,
         "models_agree": models_agree,
         "agreement_note": agreement_note,
+        "calibrated": all_calibrated,
         "disclaimer": "This result is for research-grade diagnostic-support purposes only and is not a medical diagnosis.",
     }
