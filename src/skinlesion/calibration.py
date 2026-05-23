@@ -199,7 +199,7 @@ def plot_reliability_diagram(
     ):
         _draw_panel(ax, bins, title)
 
-    fig.suptitle(f"{model_name} — reliability (val set)", fontsize=12)
+    fig.suptitle(f"{model_name} — reliability", fontsize=12)
     fig.tight_layout(rect=(0, 0, 1, 0.94))
     fig.savefig(output, dpi=150)
     plt.close(fig)
