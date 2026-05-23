@@ -37,5 +37,82 @@ Latest delivery-readiness validation:
   - Prediction results show both HAM10000 class codes and readable class names.
   - Android emulator workflow is documented with `http://10.0.2.2:8000`; not run in this validation pass.
 
-ResNet50 remains the default deployment model because it has the best validated
-test accuracy and macro F1-score among the completed experiments.
+ResNet50 remains the default single-model deployment because it has the best
+validated test accuracy and macro F1-score among the completed experiments.
+
+---
+
+## Phase 0 regression — 2026-05-24
+
+Validated on `dev` branch at `9343fb0` (after Phase B2 Grad-CAM landed):
+
+### Backend
+- `python -m compileall src scripts`: clean.
+- FastAPI real uvicorn validation on `127.0.0.1:8126`:
+  - `GET /health`: `status=ok`, ResNet50 loaded.
+  - `GET /model-info`: includes new `calibration` block reporting
+    `single.calibrated=true T=1.5391` and `ensemble.all_calibrated=true` with
+    per-model fitted T values (RN 1.5391, DN 1.689, EN 2.0267, MN 1.6551).
+  - `POST /predict`: returns `calibrated=true`, `temperature=1.5391`, top-3
+    predictions with display labels.
+  - `POST /predict-ensemble`: returns `request_id`, `inference_time_ms ~113ms`,
+    `model_version=ensemble-v1`, `models_agree=true`, `calibrated=true`,
+    ensemble top-1 + per-model breakdown with each model's `calibrated`,
+    `temperature`, `weight`, predicted class, and top-3.
+  - `POST /predict-cam`: returns `calibrated=true T=1.5391`,
+    `target_layer=layer4`, `method=grad-cam`, valid 224×224 base64-encoded
+    PNG overlay (~90KB) that decodes cleanly via `PIL.Image.verify()`.
+  - All three endpoints exercised via `scripts/test_api_demo.py` with
+    explicit assertions on the `calibrated` flag and the Grad-CAM PNG decode.
+
+### Calibration (Phase A1 + A1.5)
+- Temperature scaling fit on val (1,736 samples) for all 4 models.
+  Post-cal val ECE: RN 0.0204, DN 0.0205, EN 0.0240, MN 0.0326.
+- Test-set generalisation verified on held-out test (1,734 samples) using
+  the val-fitted T without refitting. Post-cal test ECE: RN 0.0183,
+  DN 0.0337, EN 0.0346, MN 0.0412. Max val/test ECE gap: 1.3 pp
+  (DenseNet121).
+- Top-1 accuracy unchanged on every model on every split (monotone in argmax
+  by construction).
+- Full per-model report: `docs/calibration_report.md`. Reliability diagrams:
+  `docs/figures/calibration_<m>.png` (val) and `docs/figures/calibration_<m>_test.png` (test).
+
+### Grad-CAM (Phase B1 + B2)
+- `src/skinlesion/cam.py` runs Grad-CAM with explicit hook lifecycle
+  (context manager); `src/skinlesion/cam_demo.py` reproduces the 14
+  committed sample overlays under `docs/figures/cam_samples/`.
+- API path serialised through `_CAM_LOCK` (asyncio) to avoid forward/backward
+  hook races on the shared model layer. Documented limitation for the demo;
+  production would require per-request model clones or batching.
+- Design notes: `docs/cam_design.md` (per-architecture target-layer rationale,
+  four annotated sample cases including a false positive and a false negative
+  on melanoma, known failure modes, and the "what Grad-CAM is not" section).
+
+### Flutter
+- `flutter pub get`: passed.
+- `dart analyze lib test`: 0 issues across all current lib/ and test/ files
+  (including the new `theme/`, `widgets/`, `models/cam_response.dart`, and
+  the refactored stateful `screens/result_screen.dart`).
+- `flutter test`: 1/1 passing (HomeScreen renders identity, scope, source
+  controls, and the persistent disclaimer ribbon).
+- `flutter build web`: passed.
+- Visual register: institutional navy (#0F4C81) + teal accent (#0E7490),
+  hairline-bordered cards, persistent disclaimer ribbon on every
+  prediction-bearing screen, risk-sensitive colour states (lower /
+  indeterminate / requires-evaluation). Non-diagnostic wording verified
+  throughout.
+- ResultScreen handles both single-model and ensemble modes via named
+  constructors. Single-model + non-mock mode exposes a lazy Grad-CAM
+  Attention toggle on the image card (cached after first fetch).
+- SafetyAboutScreen reachable via app-bar info icon from every screen;
+  includes Calibration and Model Attention (Grad-CAM) cards.
+
+### Known limitations carried forward
+- Melanoma recall (54–59% across all 4 models) is the headline remaining
+  clinical weakness — to be addressed in Phase C with model artefacts saved
+  under `runs_v2/` so the v1 baseline is preserved.
+- No external dataset validation yet (Phase E candidate).
+- Calibration is HAM10000-distribution only; out-of-distribution behaviour
+  is uncharacterised.
+- Grad-CAM available for the single-model (ResNet50) path only.
+- 1 Dart widget test + 1 Python smoke test; broader coverage is not in place.
