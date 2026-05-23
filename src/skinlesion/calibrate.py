@@ -244,7 +244,7 @@ def main() -> None:
         eval_split = args.eval_split
 
     run_root = Path(config["output"]["run_dir"])
-    figures_root = Path("docs/figures")
+    figures_root = Path(config["output"].get("figures_dir", "docs/figures"))
     model_names: list[str] = (
         [args.model] if args.model else list(config["models"])
     )
@@ -292,7 +292,7 @@ def main() -> None:
     print()
     print("done. wrote calibration.json and reliability diagrams to:")
     for s in summaries:
-        print(f"  runs/{s['model']}/")
+        print(f"  {run_root}/{s['model']}/")
 
 
 if __name__ == "__main__":
