@@ -12,10 +12,33 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.skinlesion.config import load_config
-from src.skinlesion.data import SkinLesionDataset, compute_class_weights, load_split_dataframe
+from src.skinlesion.data import SkinLesionDataset, compute_class_weights, load_split_dataframe, make_balanced_sampler
 from src.skinlesion.metrics import summarize_classification
 from src.skinlesion.models import create_model
 
+class FocalLoss(nn.Module):
+    """FL(p_t) = -alpha_t (1 - p_t)^gamma log(p_t).
+    
+    gamma=0 reduces to standard CE. alpha (per-class weight tensor) is optional;
+    if provided, it modulates each sample's loss by its true class's weight.
+    """
+    def __init__(self, gamma=2.0, alpha=None):
+        super().__init__()
+        self.gamma = gamma
+        if alpha is not None:
+            self.register_buffer("alpha", alpha)
+        else:
+            self.alpha = None
+    
+    def forward(self, logits, target):
+        logp = torch.log_softmax(logits, dim=1)
+        logp_t = logp.gather(1, target.unsqueeze(1)).squeeze(1)
+        p_t = logp_t.exp()
+        loss = -((1 - p_t) ** self.gamma) * logp_t
+        if self.alpha is not None:
+            loss = loss * self.alpha[target]
+        return loss.mean()
+    
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train skin lesion classifiers.")
@@ -103,13 +126,16 @@ def train_one_model(
     train_dataset = SkinLesionDataset(train_rows, classes, image_size, split="train")
     validation_dataset = SkinLesionDataset(validation_rows, classes, image_size, split="val")
 
+    use_sampler = data_config.get("sampler") == "balanced"
+    sampler = make_balanced_sampler(train_rows, classes) if use_sampler else None
     train_loader = DataLoader(
         train_dataset,
         batch_size=training_config["batch_size"],
-        shuffle=True,
+        shuffle=(sampler is None),
+        sampler=sampler,
         num_workers=data_config["num_workers"],
         pin_memory=device.type == "cuda",
-    )
+)
     validation_loader = DataLoader(
         validation_dataset,
         batch_size=training_config["batch_size"],
@@ -125,9 +151,13 @@ def train_one_model(
         pretrained=pretrained,
     ).to(device)
 
-    if training_config["weighted_loss"]:
-        weights = compute_class_weights(train_rows, classes).to(device)
-        criterion = nn.CrossEntropyLoss(weight=weights)
+    loss_name = training_config.get("loss", "ce")
+    alpha = compute_class_weights(train_rows, classes).to(device) \
+        if training_config.get("weighted_loss") else None
+    if loss_name == "focal":
+        criterion = FocalLoss(gamma=training_config.get("focal_gamma", 2.0), alpha=alpha)
+    elif training_config.get("weighted_loss"):
+        criterion = nn.CrossEntropyLoss(weight=alpha)
     else:
         criterion = nn.CrossEntropyLoss()
 

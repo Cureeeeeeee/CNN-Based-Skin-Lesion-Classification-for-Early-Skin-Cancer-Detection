@@ -1,0 +1,57 @@
+# v2 — Experiment 3 & 4: focal (gamma only, NO alpha) + balanced sampler
+# Each provides one mechanism: sampler handles class balance, focal handles hard examples.
+# Used by Experiment 3 (resnet50) AND Experiment 4 (mobilenetv3_small_100, via --model).
+# Differs from ham10000.yaml in:
+#   training.loss: focal            (new)
+#   training.focal_gamma: 2.0       (new)
+#   training.weighted_loss: false   ← KEY: focal WITHOUT alpha; sampler handles balance
+#   data.sampler: balanced          (new)
+#   output.run_dir: runs_v2
+#   output.figures_dir: docs/figures/c_phase
+
+seed: 42
+data:
+  splits_csv: data/processed/splits.csv
+  image_size: 224
+  num_workers: 0
+  sampler: balanced
+  classes:
+    - akiec
+    - bcc
+    - bkl
+    - df
+    - mel
+    - nv
+    - vasc
+training:
+  batch_size: 32
+  epochs: 20
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  dropout: 0.2
+  optimizer: adamw
+  weighted_loss: false
+  loss: focal
+  focal_gamma: 2.0
+  patience: 5
+  device: auto
+models:
+  - mobilenetv3_small_100
+  - resnet50
+  - efficientnet_b0
+  - densenet121
+output:
+  run_dir: runs_v2
+  figures_dir: docs/figures/c_phase
+ensemble:
+  version: ensemble-v1
+  weights:
+    resnet50: 0.38
+    densenet121: 0.37
+    efficientnet_b0: 0.20
+    mobilenetv3_small_100: 0.05
+  checkpoints:
+    resnet50: runs/resnet50/best.pt
+    densenet121: runs/densenet121/best.pt
+    efficientnet_b0: runs/efficientnet_b0/best.pt
+    mobilenetv3_small_100: runs/mobilenetv3_small_100/best.pt
