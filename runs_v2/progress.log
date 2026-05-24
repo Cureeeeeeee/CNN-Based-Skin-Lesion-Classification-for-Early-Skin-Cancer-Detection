@@ -1,0 +1,10 @@
+2026-05-24 12:12:52  WALL-CLOCK START. Branch phase-c-night-1 @ a80dd11. Disk free 390.75 GB (>=20 GB OK).
+2026-05-24 12:13:00  Setup 1-2 OK: worktree clean, on phase-c-night-1, disk precheck passed.
+2026-05-24 12:13:30  Setup 8 OK: verified FocalLoss (train.py:19), loss branch (train.py:154-162), sampler wiring (train.py:129-135), make_balanced_sampler (data.py:87). Infra correct.
+2026-05-24 12:13:30  Setup 10 OK: three v2 configs match design (focal+alpha / sampler-only / focal-gamma+sampler; run_dir=runs_v2, figures_dir=docs/figures/c_phase).
+2026-05-24 12:13:40  Setup 6 OK: loaded v1 baselines (resnet50 mel-recall 54.79% / F1 69.03%; densenet121 58.51% / 68.96%; efficientnet_b0 57.45% / 64.77%; mobilenetv3 56.91% / 57.26%).
+2026-05-24 12:13:50  Setup 3-7: created runs_v2/, .gitignore, STATUS.md, SUMMARY.md (v1 baselines), progress.log.
+2026-05-24 12:14:30  EXP1 resnet50_v2_focal_loss: launching training (config ham10000_v2_focal.yaml, model resnet50) in background.
+2026-05-24 12:25:30  EXP1: training done (early stop @ epoch 15, best val F1 0.660 @ epoch 10). Running test evaluation.
+2026-05-24 12:26:00  EXP1: test eval done — mel recall 64.89%, macro F1 64.68%, bal acc 73.98%. Both below thresholds => FAIL. Calibrating.
+2026-05-24 12:27:00  EXP1: calibrated (T=0.936, val ECE 0.0204, test ECE 0.0297). Renamed dir -> resnet50_v2_focal_loss. SUMMARY+STATUS updated. Committing.

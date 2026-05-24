@@ -1,0 +1,10 @@
+# Phase C runs_v2 — exclude heavy/binary artefacts, keep text reports.
+# (Repo-root .gitignore globally ignores *.log, so the re-include below is required.)
+*.pt
+*.pth
+*.png
+
+!*.md
+!*.log
+!*.txt
+!*.json
