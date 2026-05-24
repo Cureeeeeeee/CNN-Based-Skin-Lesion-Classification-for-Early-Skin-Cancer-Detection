@@ -2,10 +2,10 @@
 
 **Wall-clock start:** 2026-05-24 12:12:52
 **Branch:** phase-c-night-1
-**Current experiment:** 4 — mobilenetv3_small_100_v2_focal_plus_sampler
-**Current step:** about to launch training
-**Elapsed:** ~0.6 h
-**FAILED list:** (none) · exp1/exp2 = FAIL results; exp3 = PASS (winning variant)
+**Current experiment:** — (4 core complete) → writing 5th commit (SUMMARY + figures)
+**Current step:** core done; final comparison deliverable
+**Elapsed:** ~0.75 h
+**FAILED list:** (no errors) · Results: exp1 FAIL, exp2 FAIL, exp3 PASS, exp4 FAIL
 
 ## Core experiments
 
@@ -14,7 +14,7 @@
 | 1 | resnet50_v2_focal_loss | resnet50 | ham10000_v2_focal.yaml | DONE (FAIL) | 2026-05-24 12:26 |
 | 2 | resnet50_v2_balanced_sampler | resnet50 | ham10000_v2_sampler.yaml | DONE (FAIL) | 2026-05-24 12:38 |
 | 3 | resnet50_v2_focal_plus_sampler | resnet50 | ham10000_v2_focal_sampler.yaml | DONE (PASS) | 2026-05-24 12:49 |
-| 4 | mobilenetv3_small_100_v2_focal_plus_sampler | mobilenetv3_small_100 | ham10000_v2_focal_sampler.yaml | PENDING | 2026-05-24 12:12 |
+| 4 | mobilenetv3_small_100_v2_focal_plus_sampler | mobilenetv3_small_100 | ham10000_v2_focal_sampler.yaml | DONE (FAIL) | 2026-05-24 12:57 |
 
 **Status legend:** PENDING → RUNNING → DONE / FAILED
 
