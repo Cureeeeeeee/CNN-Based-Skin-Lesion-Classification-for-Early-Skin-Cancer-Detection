@@ -1,0 +1,4 @@
+2026-05-25 18:30:00  PHASE F (lightweight) started. Acknowledged scope, architecture, prohibitions. Created docs/phase_f/ status tracking.
+2026-05-25 18:30:30  F.4 START — lock runtime dependencies.
+2026-05-25 18:40:00  F.4 DONE — requirements-lock.txt written. Closure = pip freeze minus torchaudio+opencv-python (unused), torch/torchvision pinned by version (CPU install documented separately). 54 active pins. Committing.
+2026-05-25 19:05:00  F.2 DONE — download_checkpoints.py (--verify-only passes: 6/6 sha256 match), run_demo.sh + run_demo.ps1 (CPU, venv->torch->lock->download->uvicorn:8126), runs_v2/release_manifest.json (6 ckpt hashes+sizes), README Quick Start section. Committing.

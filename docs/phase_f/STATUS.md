@@ -14,12 +14,17 @@ local tag) → F.1 (Docker design doc).
 | Subtask | State | Notes |
 |---|---|---|
 | F.4 lock dependencies | DONE | requirements-lock.txt (54 pkgs; torch/torchvision separate; torchaudio+opencv excluded as unused) |
-| F.2 run scripts | IN PROGRESS | download_checkpoints, run_demo.{sh,ps1}, README |
-| F.3 release docs + tag | PENDING | release_v2.0.md, checklist, LOCAL v2.0 tag |
+| F.2 run scripts | DONE | download_checkpoints.py (verify-only tested OK), run_demo.sh/.ps1, release_manifest.json (6 ckpts hashed), README Quick Start |
+| F.3 release docs + tag | IN PROGRESS | release_v2.0.md, checklist, LOCAL v2.0 tag |
 | F.1 Docker design doc | PENDING | docs/docker_design.md (no build) |
 
 ## Blockers
 None.
+
+## Note
+`docs/phase_f/progress.log` is gitignored by the repo's blanket `*.log` rule;
+it is force-added (`git add -f`) each commit so it survives as a deliverable,
+consistent with how `runs_v2/*.log` are tracked.
 
 ## What the user should review first
 (to be filled at completion)

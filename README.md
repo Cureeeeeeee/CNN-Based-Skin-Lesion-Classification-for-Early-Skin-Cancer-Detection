@@ -8,6 +8,72 @@ backend for a Flutter mobile prototype.
 The project is for educational demonstration and research support only. It is
 not a medical diagnosis system.
 
+## Quick Start (Demo)
+
+The demo runs the FastAPI backend with **CPU-only** inference on any modern
+machine — no GPU required. The single-model `/predict` endpoint serves the
+Phase C v2 ResNet50 (focal + balanced sampler) winner.
+
+**Prerequisites**
+- Python 3.11+ (the only hard requirement for the backend).
+- ~2 GB free RAM during inference; ~250 MB disk for the six checkpoints.
+- Flutter SDK *only if* you also want to run the mobile UI (optional).
+- The trained checkpoints are not in the repo — `run_demo` fetches them from the
+  GitHub Release (see [`docs/release_v2.0.md`](docs/release_v2.0.md)).
+
+**One-command setup + launch**
+
+```bash
+# macOS / Linux
+bash scripts/run_demo.sh
+```
+```powershell
+# Windows
+powershell -ExecutionPolicy Bypass -File scripts\run_demo.ps1
+```
+
+The script creates `.venv`, installs CPU PyTorch + pinned deps
+(`requirements-lock.txt`), downloads + SHA256-verifies the checkpoints
+(`scripts/download_checkpoints.py` against `runs_v2/release_manifest.json`), and
+starts the API at **http://127.0.0.1:8126**.
+
+**Time estimates:** deps install 2–4 min (first run) · checkpoint download ~5 min
+(~250 MB, first run only) · API startup ~5 sec · each prediction is effectively
+instant on CPU.
+
+**Verify it's up**
+```bash
+curl http://127.0.0.1:8126/model-info     # should report resnet50_version=v2-focal-sampler
+python scripts/test_api_demo.py --base-url http://127.0.0.1:8126
+```
+
+**Expected demo behaviour:** `/predict` returns calibrated top-3 predictions
+from the v2 single model (in-distribution HAM10000 melanoma recall **73.40%**,
+temperature T=0.898). `/predict-ensemble` runs the 4-model v1 ensemble.
+
+**Mobile UI (optional):** in `mobile_app/`, run `flutter pub get` then
+`flutter run -d chrome`, and point the in-app API URL at
+`http://127.0.0.1:8126`. See [`mobile_app/README.md`](mobile_app/README.md).
+
+**Troubleshooting**
+- *`/model-info` says model not loaded / `status: degraded`* → the checkpoints
+  are missing. Run `python scripts/download_checkpoints.py` and confirm
+  `runs/resnet50_v2/best.pt` exists.
+- *Checkpoint download fails with a placeholder-URL error* → the maintainer must
+  set the Release URL first (see `scripts/download_checkpoints.py` header and
+  [`docs/release_checklist.md`](docs/release_checklist.md)). Use
+  `--verify-only` to check files already on disk.
+- *Predictions look uncalibrated (`calibrated: false`)* → `calibration.json` is
+  missing next to the checkpoint; re-run the download script.
+- *Want to roll back to v1 ResNet50* → set
+  `production.resnet50_checkpoint: resnet50` in `configs/ham10000.yaml` and
+  restart (see `docs/validation.md`).
+
+> **Important:** external-dataset validation shows melanoma recall drops to ~37%
+> on out-of-distribution ISIC 2019 images — the in-distribution number does not
+> generalise. This is an educational prototype, **not** a medical device. See
+> [`docs/phase_e_external_validation.md`](docs/phase_e_external_validation.md).
+
 ## Current Results
 
 | Model | Test Accuracy | Macro F1 | Role |
