@@ -96,3 +96,18 @@ Validated locally (Phase 0 regression, 2026-05-24):
   responses; Grad-CAM overlay decodes to a valid 224×224 PNG.
 
 For backend validation see `../docs/validation.md`.
+
+## License & Attribution
+
+This frontend is part of an educational prototype restricted to **non-commercial
+use**. The backend model weights are derivative works of the HAM10000 dataset
+(CC BY-NC 4.0), so the NonCommercial restriction applies to the system as a
+whole. The Flutter SDK itself is BSD-3-Clause.
+
+The `SafetyAboutScreen` (About page) is where the required dataset attributions
+should be surfaced to users — the HAM10000 attribution now, and the ISIC 2019 /
+BCN_20000 / MSK attributions once external validation ships. *(That is a UI
+change for a later phase; this note only documents the requirement.)*
+
+Full license terms, dataset citations, and dependency licenses are in
+[`../docs/licenses.md`](../docs/licenses.md).

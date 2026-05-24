@@ -350,3 +350,33 @@ the backend and uses a fixed sample output for presentation safety.
   widget and integration tests are not in place.
 - Flutter Android deployment requires Android SDK configuration on the host
   machine.
+- **Non-commercial use only.** The training data (HAM10000, CC BY-NC 4.0) makes
+  the trained checkpoints derivative works bound by the same NonCommercial
+  terms — this project may be used for academic / research / educational
+  purposes but not for any commercial product without renegotiating the dataset
+  licenses. See [License & Citations](#license--citations).
+
+## License & Citations
+
+This is an educational prototype, not a medical device, and is restricted to
+**non-commercial use**.
+
+- **Code license:** no `LICENSE` file is committed yet; MIT or Apache-2.0 is
+  recommended for the source code (the choice is the author's). A permissive
+  code license governs the code only — it cannot relax the dataset terms below.
+- **Datasets:** **HAM10000** (training) and **ISIC 2019** (planned external
+  validation) are both **CC BY-NC 4.0** (Attribution–NonCommercial). The model
+  weights are derivative works of this data, so the NonCommercial restriction
+  propagates to them and to the project as a whole.
+- **Dependencies:** all third-party libraries are permissive (BSD / MIT /
+  Apache-2.0 / PSF-based); no GPL/AGPL/LGPL is present.
+
+**Required dataset citation (HAM10000):**
+
+> Tschandl P., Rosendahl C. & Kittler H. The HAM10000 dataset, a large
+> collection of multi-source dermatoscopic images of common pigmented skin
+> lesions. *Scientific Data* **5**, 180161 (2018). doi:10.1038/sdata.2018.161
+
+Full license terms, all dataset citations (including ISIC 2019 / BCN_20000 /
+MSK), per-dependency licenses with verification URLs, distribution rules, and a
+BibTeX citation template are in **[`docs/licenses.md`](docs/licenses.md)**.

@@ -4,8 +4,13 @@ __pycache__/
 venv/
 .env
 
-data/raw/
-data/processed/
+# All datasets are gitignored — raw, processed, and external (e.g. ISIC 2019,
+# ~3.6 GB) live under data/ locally and must never enter the repo. This catch-all
+# replaces the former explicit data/raw/ + data/processed/ lines.
+# NOTE: use data/* (not data/) so the .gitkeep negation below works — a bare
+# "data/" directory exclusion would make the negation a no-op.
+data/*
+!data/.gitkeep
 runs/
 /models/
 
