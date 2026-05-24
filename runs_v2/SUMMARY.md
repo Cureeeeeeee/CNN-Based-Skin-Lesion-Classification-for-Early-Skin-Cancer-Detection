@@ -49,4 +49,30 @@ Each v2 experiment introduces exactly **one** rebalancing mechanism (strict sing
 
 ## Recommendation
 
-_To be written after the 4 core experiments complete: did any v2 meet both thresholds (mel recall ≥ 68% AND macro F1 ≥ 67%)? Which is the Phase C2 propagation candidate?_
+**One variant meets both thresholds: `resnet50_v2_focal_plus_sampler` (focal γ=2.0 + balanced sampler).**
+mel recall **73.40%** (≥68 ✓, +18.6 pp over v1) and macro F1 **70.08%** (≥67 ✓, +1.05 pp over v1),
+with balanced accuracy 76.44% (the best of all runs) and clean post-hoc calibration
+(test ECE 0.0248, T=0.898). **This is the Phase C2 propagation candidate.**
+
+**Why the single-mechanism variants failed — and why the combination works.**
+- *Focal alone* (exp 1) lifts mel recall to 64.9% but collapses macro F1 to 64.7%: the
+  hard-example weighting over-corrects, dragging nv recall from 86.9%→76.5%.
+- *Balanced sampler alone* (exp 2) holds macro F1 high (71.2%, even above v1) but mel recall
+  *drops below v1* to 50.0% — oversampling minority classes uniformly does not specifically
+  help the hardest minority (mel), while nv recall climbs to 91.1%.
+- *Focal + sampler* (exp 3) is the only combination that lifts mel **and** preserves F1: the
+  sampler supplies class balance while focal concentrates gradient on the still-hard melanoma
+  examples. The two mechanisms are complementary, not redundant — neither alone suffices.
+
+**Confusion-matrix delta (winner vs v1, see `docs/figures/c_phase/confusion_delta_resnet50.png`).**
+On the test set the winner correctly classifies **+35 more melanomas** and makes **15 fewer
+mel→nv misses** (the clinically dangerous error), at the cost of +72 nv→mel false positives.
+For a melanoma-screening prototype this is the desirable sensitivity/precision trade.
+
+**Architecture caveat.** The same recipe did **not** transfer to MobileNetV3-small (exp 4):
+mel recall 48.9% (below its own v1 56.9%), macro F1 60.3%. The smaller backbone lacks the
+capacity to exploit the rebalancing. **Propagation must be re-validated per architecture, not assumed.**
+
+**Next step (Phase C2):** adopt focal+sampler as the ResNet50 candidate and re-validate it on the
+remaining ensemble backbones (DenseNet121, EfficientNet-B0) before any ensemble-level change. The
+stretch queue below does exactly this when budget allows.

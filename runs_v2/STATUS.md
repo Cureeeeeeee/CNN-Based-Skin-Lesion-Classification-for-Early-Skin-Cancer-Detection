@@ -2,10 +2,17 @@
 
 **Wall-clock start:** 2026-05-24 12:12:52
 **Branch:** phase-c-night-1
-**Current experiment:** — (4 core complete) → writing 5th commit (SUMMARY + figures)
-**Current step:** core done; final comparison deliverable
-**Elapsed:** ~0.75 h
+**Current experiment:** 5th commit done → STRETCH QUEUE (entry conditions met)
+**Current step:** stretch — winning variant = focal_plus_sampler (mel margin +5.40pp)
+**Elapsed:** ~0.8 h
 **FAILED list:** (no errors) · Results: exp1 FAIL, exp2 FAIL, exp3 PASS, exp4 FAIL
+
+## Stretch queue (entry conditions ALL met: 4 core DONE, summary+5th commit, no halt sentinels, <7h, exp3 PASS)
+| # | Stretch | Model | Status |
+|---|---|---|---|
+| S1 | densenet121_v2_focal_plus_sampler | densenet121 | PENDING |
+| S2 | efficientnet_b0_v2_focal_plus_sampler | efficientnet_b0 | PENDING |
+| S3 | per_class_recall_all_v2.png + summary section | — | PENDING |
 
 ## Core experiments
 

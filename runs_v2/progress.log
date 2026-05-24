@@ -20,3 +20,4 @@
 2026-05-24 12:56:00  EXP4: training done. Running test evaluation.
 2026-05-24 12:56:30  EXP4: test eval done — mel recall 48.94%, macro F1 60.31%, bal acc 72.95%. Both below thresholds => FAIL. focal+sampler did NOT transfer to MobileNetV3-small. Calibrating.
 2026-05-24 12:57:30  EXP4: calibrated (T=0.927, val ECE 0.0231, test ECE 0.0337). Renamed dir -> mobilenetv3_small_100_v2_focal_plus_sampler. All 4 core experiments DONE. Committing exp4.
+2026-05-24 13:00:00  EXP4 committed. All 4 core DONE (exp3 PASS, others FAIL). Generated 2 figures. Wrote SUMMARY recommendation. Committing 5th (summary) commit.
