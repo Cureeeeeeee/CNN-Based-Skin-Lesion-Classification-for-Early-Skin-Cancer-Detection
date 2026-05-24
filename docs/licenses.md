@@ -15,7 +15,7 @@ project's own license, and the resulting use/distribution restrictions.
 ## 1. Project License
 
 **This project is licensed under the MIT License — see [`LICENSE`](../LICENSE)
-in the repository root** (Copyright (c) 2026 Jiahao).
+in the repository root** (Copyright (c) 2026 Jiahao Liu).
 
 MIT was chosen for maximum reuse of the *source code* in an academic / open
 context. **Crucially, the MIT license governs the code only.** It does **not**

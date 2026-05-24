@@ -1,0 +1,117 @@
+{
+  "config_name": "v1_single_efficientnet_b0",
+  "test_set": "ham_test",
+  "n_total": 1734,
+  "n_evaluated": 1734,
+  "n_skipped": 0,
+  "skipped_ids": [],
+  "members": [
+    {
+      "model": "efficientnet_b0",
+      "checkpoint_dir": "runs/efficientnet_b0",
+      "weight": 1.0,
+      "temperature": 2.0267,
+      "calibrated": true
+    }
+  ],
+  "accuracy": 0.7745098039215687,
+  "macro_f1": 0.6477410434492592,
+  "macro_recall": 0.7247754109918655,
+  "balanced_accuracy": 0.7247754109918655,
+  "ece": 0.034580456395875224,
+  "per_class_recall": {
+    "akiec": 0.6923076923076923,
+    "bcc": 0.6923076923076923,
+    "bkl": 0.628140703517588,
+    "df": 0.72,
+    "mel": 0.574468085106383,
+    "nv": 0.8402777777777778,
+    "vasc": 0.9259259259259259
+  },
+  "mel_recall": 0.574468085106383,
+  "bcc_recall": 0.6923076923076923,
+  "akiec_recall": 0.6923076923076923,
+  "true_label_counts": {
+    "akiec": 52,
+    "bcc": 91,
+    "bkl": 199,
+    "df": 25,
+    "mel": 188,
+    "nv": 1152,
+    "vasc": 27
+  },
+  "predicted_label_counts": {
+    "akiec": 89,
+    "bcc": 99,
+    "bkl": 223,
+    "df": 29,
+    "mel": 232,
+    "nv": 1017,
+    "vasc": 45
+  },
+  "confusion_matrix": [
+    [
+      36,
+      9,
+      4,
+      0,
+      3,
+      0,
+      0
+    ],
+    [
+      11,
+      63,
+      5,
+      0,
+      6,
+      1,
+      5
+    ],
+    [
+      20,
+      6,
+      125,
+      6,
+      33,
+      9,
+      0
+    ],
+    [
+      0,
+      1,
+      1,
+      18,
+      4,
+      1,
+      0
+    ],
+    [
+      8,
+      1,
+      28,
+      2,
+      108,
+      36,
+      5
+    ],
+    [
+      14,
+      19,
+      60,
+      3,
+      78,
+      968,
+      10
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      25
+    ]
+  ]
+}

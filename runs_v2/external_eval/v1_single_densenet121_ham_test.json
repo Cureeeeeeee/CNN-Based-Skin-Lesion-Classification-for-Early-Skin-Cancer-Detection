@@ -1,0 +1,117 @@
+{
+  "config_name": "v1_single_densenet121",
+  "test_set": "ham_test",
+  "n_total": 1734,
+  "n_evaluated": 1734,
+  "n_skipped": 0,
+  "skipped_ids": [],
+  "members": [
+    {
+      "model": "densenet121",
+      "checkpoint_dir": "runs/densenet121",
+      "weight": 1.0,
+      "temperature": 1.689,
+      "calibrated": true
+    }
+  ],
+  "accuracy": 0.7964244521337946,
+  "macro_f1": 0.6896094262267353,
+  "macro_recall": 0.7517146716123984,
+  "balanced_accuracy": 0.7517146716123984,
+  "ece": 0.03369713672614011,
+  "per_class_recall": {
+    "akiec": 0.5961538461538461,
+    "bcc": 0.8461538461538461,
+    "bkl": 0.7487437185929648,
+    "df": 0.68,
+    "mel": 0.5851063829787234,
+    "nv": 0.8428819444444444,
+    "vasc": 0.9629629629629629
+  },
+  "mel_recall": 0.5851063829787234,
+  "bcc_recall": 0.8461538461538461,
+  "akiec_recall": 0.5961538461538461,
+  "true_label_counts": {
+    "akiec": 52,
+    "bcc": 91,
+    "bkl": 199,
+    "df": 25,
+    "mel": 188,
+    "nv": 1152,
+    "vasc": 27
+  },
+  "predicted_label_counts": {
+    "akiec": 60,
+    "bcc": 174,
+    "bkl": 235,
+    "df": 23,
+    "mel": 184,
+    "nv": 1021,
+    "vasc": 37
+  },
+  "confusion_matrix": [
+    [
+      31,
+      11,
+      5,
+      0,
+      3,
+      2,
+      0
+    ],
+    [
+      4,
+      77,
+      2,
+      0,
+      6,
+      0,
+      2
+    ],
+    [
+      15,
+      19,
+      149,
+      0,
+      10,
+      6,
+      0
+    ],
+    [
+      0,
+      1,
+      1,
+      17,
+      2,
+      4,
+      0
+    ],
+    [
+      3,
+      10,
+      24,
+      1,
+      110,
+      38,
+      2
+    ],
+    [
+      7,
+      56,
+      54,
+      5,
+      52,
+      971,
+      7
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      26
+    ]
+  ]
+}

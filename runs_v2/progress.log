@@ -30,3 +30,4 @@
 2026-05-24 13:26:30  STRETCH2: test eval done — mel recall 58.51%, macro F1 63.26%, bal acc 67.95%. Both <thresholds => FAIL (recipe does not transfer to EN-B0). Calibrating.
 2026-05-24 13:27:00  STRETCH2: calibrated (T=1.307, val ECE 0.0157, test ECE 0.0232). Renamed dir -> efficientnet_b0_v2_focal_plus_sampler. Committing S2.
 2026-05-24 13:28:30  STRETCH3: per_class_recall_all_v2.png generated; SUMMARY stretch-results section appended; STATUS finalized. Removed scratch script. Committing final stretch commit. ALL DONE.
+2026-05-25 18:05:00  PHASE E.6: external validation on ISIC 2019 clean test (4353, 0 skipped). Sanity gate reproduced Stage B baseline exactly (bs=32). Severe shift: macro F1 -25..-35pp HAM->ISIC; external mel recall 27-43% (v2 RN50 37.09 still > v1 RN50 26.61, +10.5pp). v1 ensemble most robust externally (macF1 41.24, ECE 0.0471 vs 0.14-0.18 singles). Calibration does NOT transfer OOD. See docs/phase_e_external_validation.md.
