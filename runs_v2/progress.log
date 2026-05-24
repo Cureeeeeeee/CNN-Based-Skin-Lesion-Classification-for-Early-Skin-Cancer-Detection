@@ -8,3 +8,7 @@
 2026-05-24 12:25:30  EXP1: training done (early stop @ epoch 15, best val F1 0.660 @ epoch 10). Running test evaluation.
 2026-05-24 12:26:00  EXP1: test eval done — mel recall 64.89%, macro F1 64.68%, bal acc 73.98%. Both below thresholds => FAIL. Calibrating.
 2026-05-24 12:27:00  EXP1: calibrated (T=0.936, val ECE 0.0204, test ECE 0.0297). Renamed dir -> resnet50_v2_focal_loss. SUMMARY+STATUS updated. Committing.
+2026-05-24 12:27:30  EXP1 committed. EXP2 resnet50_v2_balanced_sampler: launching training (config ham10000_v2_sampler.yaml, model resnet50) in background.
+2026-05-24 12:37:00  EXP2: training done. Running test evaluation.
+2026-05-24 12:37:30  EXP2: test eval done — mel recall 50.00%, macro F1 71.18%, bal acc 73.28%. mel <68% => FAIL. Calibrating.
+2026-05-24 12:38:00  EXP2: calibrated (T=2.022, val ECE 0.0161, test ECE 0.0319). Renamed dir -> resnet50_v2_balanced_sampler. SUMMARY+STATUS updated. Committing.

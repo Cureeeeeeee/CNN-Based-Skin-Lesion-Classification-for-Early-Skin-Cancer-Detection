@@ -32,7 +32,7 @@ Each v2 experiment introduces exactly **one** rebalancing mechanism (strict sing
 | # | Experiment | mel recall | bcc recall | akiec recall | Macro F1 | Balanced acc | val ECE (cal) | test ECE (cal) | Train time | Verdict |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | resnet50_v2_focal_loss | 64.89% | 86.81% | 63.46% | 64.68% | 73.98% | 0.0204 | 0.0297 | ~9 min | **FAIL** (mel <68, F1 <67) |
-| 2 | resnet50_v2_balanced_sampler | _pending_ | | | | | | | | |
+| 2 | resnet50_v2_balanced_sampler | 50.00% | 86.81% | 61.54% | 71.18% | 73.28% | 0.0161 | 0.0319 | ~10 min | **FAIL** (mel 50% < 68%, below v1) |
 | 3 | resnet50_v2_focal_plus_sampler | _pending_ | | | | | | | | |
 | 4 | mobilenetv3_small_100_v2_focal_plus_sampler | _pending_ | | | | | | | | |
 
@@ -41,6 +41,7 @@ Each v2 experiment introduces exactly **one** rebalancing mechanism (strict sing
 | Experiment | akiec | bcc | bkl | df | mel | nv | vasc |
 |---|---|---|---|---|---|---|---|
 | resnet50_v2_focal_loss | 63.46% | 86.81% | 65.33% | 72.00% | 64.89% | 76.48% | 88.89% |
+| resnet50_v2_balanced_sampler | 61.54% | 86.81% | 66.33% | 72.00% | 50.00% | 91.06% | 85.19% |
 
 ---
 
