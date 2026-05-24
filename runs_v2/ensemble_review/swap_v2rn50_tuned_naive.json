@@ -1,0 +1,116 @@
+{
+  "config_name": "swap_v2rn50_tuned_naive",
+  "n_test": 1734,
+  "members": [
+    {
+      "model": "resnet50",
+      "checkpoint_dir": "runs/resnet50_v2",
+      "weight": 0.268434,
+      "temperature": 0.8982,
+      "calibrated": true
+    },
+    {
+      "model": "densenet121",
+      "checkpoint_dir": "runs/densenet121",
+      "weight": 0.264144,
+      "temperature": 1.689,
+      "calibrated": true
+    },
+    {
+      "model": "efficientnet_b0",
+      "checkpoint_dir": "runs/efficientnet_b0",
+      "weight": 0.248094,
+      "temperature": 2.0267,
+      "calibrated": true
+    },
+    {
+      "model": "mobilenetv3_small_100",
+      "checkpoint_dir": "runs/mobilenetv3_small_100",
+      "weight": 0.219328,
+      "temperature": 1.6551,
+      "calibrated": true
+    }
+  ],
+  "accuracy": 0.8160322952710496,
+  "macro_f1": 0.7271653589818844,
+  "macro_recall": 0.7905101296856806,
+  "balanced_accuracy": 0.7905101296856806,
+  "per_class_recall": {
+    "akiec": 0.6346153846153846,
+    "bcc": 0.8791208791208791,
+    "bkl": 0.7537688442211056,
+    "df": 0.8,
+    "mel": 0.648936170212766,
+    "nv": 0.8541666666666666,
+    "vasc": 0.9629629629629629
+  },
+  "mel_recall": 0.648936170212766,
+  "bcc_recall": 0.8791208791208791,
+  "akiec_recall": 0.6346153846153846,
+  "agreement_rate": 0.5697808535178778,
+  "confusion_matrix": [
+    [
+      33,
+      10,
+      5,
+      0,
+      4,
+      0,
+      0
+    ],
+    [
+      4,
+      80,
+      2,
+      0,
+      3,
+      0,
+      2
+    ],
+    [
+      13,
+      8,
+      150,
+      1,
+      19,
+      8,
+      0
+    ],
+    [
+      1,
+      1,
+      1,
+      20,
+      2,
+      0,
+      0
+    ],
+    [
+      5,
+      9,
+      15,
+      0,
+      122,
+      31,
+      6
+    ],
+    [
+      9,
+      28,
+      41,
+      2,
+      82,
+      984,
+      6
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      26
+    ]
+  ]
+}
