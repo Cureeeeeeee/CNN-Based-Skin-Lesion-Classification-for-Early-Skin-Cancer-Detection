@@ -15,8 +15,8 @@ local tag) → F.1 (Docker design doc).
 |---|---|---|
 | F.4 lock dependencies | DONE | requirements-lock.txt (54 pkgs; torch/torchvision separate; torchaudio+opencv excluded as unused) |
 | F.2 run scripts | DONE | download_checkpoints.py (verify-only tested OK), run_demo.sh/.ps1, release_manifest.json (6 ckpts hashed), README Quick Start |
-| F.3 release docs + tag | IN PROGRESS | release_v2.0.md, checklist, LOCAL v2.0 tag |
-| F.1 Docker design doc | PENDING | docs/docker_design.md (no build) |
+| F.3 release docs + tag | DONE | release_v2.0.md (12 sections), release_checklist.md, LOCAL v2.0 annotated tag on the F.3 commit |
+| F.1 Docker design doc | IN PROGRESS | docs/docker_design.md (no build) |
 
 ## Blockers
 None.
