@@ -29,3 +29,4 @@
 2026-05-24 13:26:00  STRETCH2: training done. Running test evaluation.
 2026-05-24 13:26:30  STRETCH2: test eval done — mel recall 58.51%, macro F1 63.26%, bal acc 67.95%. Both <thresholds => FAIL (recipe does not transfer to EN-B0). Calibrating.
 2026-05-24 13:27:00  STRETCH2: calibrated (T=1.307, val ECE 0.0157, test ECE 0.0232). Renamed dir -> efficientnet_b0_v2_focal_plus_sampler. Committing S2.
+2026-05-24 13:28:30  STRETCH3: per_class_recall_all_v2.png generated; SUMMARY stretch-results section appended; STATUS finalized. Removed scratch script. Committing final stretch commit. ALL DONE.

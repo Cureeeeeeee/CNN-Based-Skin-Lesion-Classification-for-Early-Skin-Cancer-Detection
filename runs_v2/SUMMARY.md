@@ -76,3 +76,32 @@ capacity to exploit the rebalancing. **Propagation must be re-validated per arch
 **Next step (Phase C2):** adopt focal+sampler as the ResNet50 candidate and re-validate it on the
 remaining ensemble backbones (DenseNet121, EfficientNet-B0) before any ensemble-level change. The
 stretch queue below does exactly this when budget allows.
+
+---
+
+## Stretch queue results
+
+Entry conditions were all met (4 core DONE, summary + 5th commit written, no halt sentinels,
+wall-clock <7h, exp3 PASS), so the winning recipe (**focal γ=2.0 + balanced sampler**) was
+re-run on the two remaining ensemble backbones to test cross-architecture transfer.
+
+| Stretch | Model | mel recall | macro F1 | Balanced acc | val ECE (cal) | test ECE (cal) | Verdict |
+|---|---|---|---|---|---|---|---|
+| S1 | densenet121_v2_focal_plus_sampler | 61.17% | 70.29% | 73.99% | 0.0269 | 0.0239 | **FAIL** (mel <68) |
+| S2 | efficientnet_b0_v2_focal_plus_sampler | 58.51% | 63.26% | 67.95% | 0.0157 | 0.0232 | **FAIL** (both <thr) |
+
+**mel recall vs each backbone's own v1 baseline (focal+sampler recipe):**
+
+| Backbone | v1 mel | v2 mel | Δ | F1 v1→v2 |
+|---|---|---|---|---|
+| ResNet50 | 54.79% | **73.40%** | **+18.6 pp** ✅ | 69.03→70.08 |
+| DenseNet121 | 58.51% | 61.17% | +2.7 pp | 68.96→70.29 |
+| EfficientNet-B0 | 57.45% | 58.51% | +1.1 pp | 64.77→63.26 |
+| MobileNetV3-small | 56.91% | 48.94% | −8.0 pp | 57.26→60.31 |
+
+**Conclusion — the recipe does NOT transfer.** Only ResNet50 clears the 68% mel bar; the gain
+shrinks monotonically with backbone capacity (DN121 +2.7, EN-B0 +1.1, MobileNet −8.0). macro F1 is
+preserved or improved everywhere except EfficientNet-B0. The strong melanoma-recall lift is a
+**ResNet50-specific** property of focal+sampler, not a general rebalancing law. Phase C2 should treat
+focal+sampler as a per-architecture tuning choice, validated individually, rather than a recipe to
+broadcast across the ensemble. See `docs/figures/c_phase/per_class_recall_all_v2.png`.
