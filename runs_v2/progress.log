@@ -25,3 +25,7 @@
 2026-05-24 13:14:00  STRETCH1: training done. Running test evaluation.
 2026-05-24 13:14:30  STRETCH1: test eval done — mel recall 61.17%, macro F1 70.29%, bal acc 73.99%. mel <68% => FAIL (partial transfer: +2.7pp mel over v1 DN121). Calibrating.
 2026-05-24 13:15:30  STRETCH1: calibrated (T=1.005, val ECE 0.0269, test ECE 0.0239). Renamed dir -> densenet121_v2_focal_plus_sampler. Committing S1.
+2026-05-24 13:16:00  STRETCH1 committed. STRETCH 2 efficientnet_b0_v2_focal_plus_sampler: launching training in background.
+2026-05-24 13:26:00  STRETCH2: training done. Running test evaluation.
+2026-05-24 13:26:30  STRETCH2: test eval done — mel recall 58.51%, macro F1 63.26%, bal acc 67.95%. Both <thresholds => FAIL (recipe does not transfer to EN-B0). Calibrating.
+2026-05-24 13:27:00  STRETCH2: calibrated (T=1.307, val ECE 0.0157, test ECE 0.0232). Renamed dir -> efficientnet_b0_v2_focal_plus_sampler. Committing S2.

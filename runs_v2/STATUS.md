@@ -2,17 +2,17 @@
 
 **Wall-clock start:** 2026-05-24 12:12:52
 **Branch:** phase-c-night-1
-**Current experiment:** STRETCH 2 — efficientnet_b0_v2_focal_plus_sampler
-**Current step:** stretch — S1 done (FAIL), launching S2
-**Elapsed:** ~1.05 h
+**Current experiment:** STRETCH 3 — final figure + summary section
+**Current step:** stretch — S1/S2 done (both FAIL), generating per_class_recall_all_v2.png
+**Elapsed:** ~1.25 h
 **FAILED list:** (no errors) · Results: exp1 FAIL, exp2 FAIL, exp3 PASS, exp4 FAIL
 
 ## Stretch queue (entry conditions ALL met: 4 core DONE, summary+5th commit, no halt sentinels, <7h, exp3 PASS)
 | # | Stretch | Model | Status |
 |---|---|---|---|
 | S1 | densenet121_v2_focal_plus_sampler | densenet121 | DONE (FAIL: mel 61.2% / F1 70.3%) |
-| S2 | efficientnet_b0_v2_focal_plus_sampler | efficientnet_b0 | RUNNING |
-| S3 | per_class_recall_all_v2.png + summary section | — | PENDING |
+| S2 | efficientnet_b0_v2_focal_plus_sampler | efficientnet_b0 | DONE (FAIL: mel 58.5% / F1 63.3%) |
+| S3 | per_class_recall_all_v2.png + summary section | — | RUNNING |
 
 ## Core experiments
 
