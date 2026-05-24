@@ -42,14 +42,50 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MODEL_PATH = os.getenv("SKINLESION_MODEL_PATH", "runs/resnet50/best.pt")
 CONFIG_PATH = os.getenv("SKINLESION_CONFIG_PATH", "configs/ham10000.yaml")
+
+
+def resolve_resnet50_dir(config_path: str) -> Path:
+    """Resolve the deployed single-model ResNet50 directory from the
+    ``production`` block of the config (Phase C Stage A). The block lets us
+    A/B the Phase C focal+sampler winner (``resnet50_v2``) against v1
+    (``resnet50``) without touching code. Falls back to the v1 directory
+    when the block or key is absent — backwards compatible with
+    pre-Phase-C configs."""
+    try:
+        config = load_config(config_path)
+    except Exception:
+        config = {}
+    production_config = config.get("production", {}) or {}
+    resnet50_subdir = production_config.get("resnet50_checkpoint", "resnet50")
+    return Path(f"runs/{resnet50_subdir}")
+
+
+def resolve_resnet50_version(model_dir: Path) -> str:
+    """Report which ResNet50 generation is deployed. Prefers a ``VERSION``
+    file in the model directory; otherwise infers from the directory name."""
+    version_file = model_dir / "VERSION"
+    if version_file.exists():
+        return version_file.read_text(encoding="utf-8").strip()
+    name = model_dir.name
+    if name == "resnet50":
+        return "v1"
+    if "v2" in name:
+        return "v2-focal-sampler"
+    return name
+
+
+RESNET50_DIR = resolve_resnet50_dir(CONFIG_PATH)
+MODEL_PATH = os.getenv("SKINLESION_MODEL_PATH", f"{RESNET50_DIR.as_posix()}/best.pt")
 DEVICE = select_device(os.getenv("SKINLESION_DEVICE", "auto"))
 MODEL = None
 MODEL_NAME = None
 CLASSES: list[str] = []
 TRANSFORM = None
 LOAD_ERROR: str | None = None
+# Which ResNet50 generation the single-model path has loaded (Phase C Stage A).
+# "v1" = original; "v2-focal-sampler" = focal+balanced-sampler winner.
+RESNET50_VERSION: str = "v1"
 # Post-hoc calibration for the single-model /predict path. Mirrors the
 # per-model fields on LoadedModel for the ensemble path. Defaults match
 # "uncalibrated" so the API is backwards-compatible if no calibration
@@ -114,6 +150,7 @@ def root() -> dict[str, object]:
 def load_model() -> None:
     global MODEL, MODEL_NAME, CLASSES, TRANSFORM, LOAD_ERROR
     global SINGLE_TEMPERATURE, SINGLE_CALIBRATED, SINGLE_CALIBRATION
+    global RESNET50_VERSION
     checkpoint_path = Path(MODEL_PATH)
     if not checkpoint_path.exists():
         LOAD_ERROR = f"Checkpoint not found: {MODEL_PATH}"
@@ -136,6 +173,7 @@ def load_model() -> None:
         # Pick up post-hoc calibration if it has been fit (Phase A1).
         SINGLE_TEMPERATURE, SINGLE_CALIBRATION = load_calibration(checkpoint_path)
         SINGLE_CALIBRATED = SINGLE_CALIBRATION is not None
+        RESNET50_VERSION = resolve_resnet50_version(checkpoint_path.parent)
     except Exception as exc:
         MODEL = None
         MODEL_NAME = None
@@ -191,6 +229,7 @@ def model_info() -> dict[str, object]:
         "default_model": "ResNet50",
         "loaded_model": display_model_name(MODEL_NAME),
         "raw_loaded_model": MODEL_NAME,
+        "resnet50_version": RESNET50_VERSION,
         "checkpoint": MODEL_PATH,
         "classes": CLASSES,
         "class_display_names": CLASS_DISPLAY_NAMES,

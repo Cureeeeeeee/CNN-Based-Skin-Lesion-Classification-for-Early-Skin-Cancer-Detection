@@ -116,3 +116,61 @@ Validated on `dev` branch at `9343fb0` (after Phase B2 Grad-CAM landed):
   is uncharacterised.
 - Grad-CAM available for the single-model (ResNet50) path only.
 - 1 Dart widget test + 1 Python smoke test; broader coverage is not in place.
+
+---
+
+## Phase C Stage A deploy — 2026-05-25
+
+Deployed the Phase C night-1 winner (`resnet50_v2_focal_plus_sampler`) to the
+single-model production path in a **version-aware, rollback-ready** way.
+
+### Design
+- The winner's artefacts (`best.pt`, `calibration.json`, `test_metrics.json`,
+  `history.json`, reliability PNGs, confusion matrix) were copied into
+  `runs/resnet50_v2/`. v1 was first backed up byte-for-byte to
+  `runs/resnet50_v1_backup/` (SHA256 verified, `best.pt` = 94,392,749 bytes).
+- A new `production:` block in `configs/ham10000.yaml` carries
+  `resnet50_checkpoint: resnet50_v2`. `api.py` now resolves the single-model
+  ResNet50 directory from this block (`resolve_resnet50_dir()`), falling back
+  to `resnet50` (v1) when the block/key is absent — backwards compatible.
+- The version-aware logic affects **only** the single-model paths: `/predict`,
+  `/predict-cam`, and the `/model-info` report. The 4-model ensemble loader
+  (`config['ensemble']['checkpoints']`) was deliberately left unchanged and
+  **still uses v1 across all four backbones**, including its ResNet50 member.
+- `/model-info` now returns a `resnet50_version` field, read from a `VERSION`
+  file in the model directory (`runs/resnet50_v2/VERSION` → `v2-focal-sampler`)
+  and inferred as `v1` for the original `resnet50` directory.
+
+### Deployed-model metrics (`runs/resnet50_v2/test_metrics.json`)
+- mel recall **73.40%** (v1 54.79%, +18.6 pp); macro F1 **70.08%**
+  (v1 69.03%, +1.05 pp); accuracy 77.28%.
+- Calibration: val-fitted temperature **T=0.8982**, post-cal test ECE
+  **0.0248** (v1 0.0297).
+
+### Smoke test (real uvicorn on `127.0.0.1:8126`, via `scripts/test_api_demo.py`)
+- `GET /health`: `status=ok`, `checkpoint=runs/resnet50_v2/best.pt`, CUDA.
+- `GET /model-info`: `resnet50_version=v2-focal-sampler`,
+  `calibration.single.calibrated=true T=0.8982`.
+- `POST /predict`: `calibrated=true T=0.8982`. Demo top-3:
+  `nv` 61.27%, `mel` 38.07%, `bkl` 0.63%.
+- `POST /predict-ensemble`: `model_version=ensemble-v1`, `models_agree=true`,
+  ensemble top-1 `nv` 86.64%, `inference_time_ms ~131ms`. Per-model T values
+  are the **v1** calibration set (RN 1.5391, DN 1.689, EN 2.0267, MN 1.6551) —
+  expected, because the ensemble path was intentionally not migrated to v2.
+- `POST /predict-cam`: `calibrated=true T=0.8982`, `target_layer=layer4`,
+  valid 224×224 base64 PNG.
+
+> **Spec note for reviewer:** the Stage-A verification checklist anticipated the
+> ensemble's ResNet50 row showing the v2 temperature (~0.898). It shows v1's
+> 1.5391 instead. This is the *correct* outcome given the explicit Stage-A
+> design instruction to leave the ensemble on v1 across all backbones — the two
+> checklist items were mutually inconsistent and the design instruction was
+> treated as authoritative. Migrating the ensemble's ResNet50 member to v2 is a
+> separate, deliberate follow-up if desired.
+
+### Rollback
+Set `production.resnet50_checkpoint` back to `resnet50` in
+`configs/ham10000.yaml` and restart the API. The single-model path then loads
+the v1 checkpoint (`runs/resnet50/best.pt`, T=1.5391) and `/model-info` reports
+`resnet50_version=v1`. No code change required. `runs/resnet50_v1_backup/` is an
+additional safety copy of the original v1 artefacts.

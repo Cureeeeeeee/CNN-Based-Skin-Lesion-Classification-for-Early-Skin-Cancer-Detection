@@ -326,11 +326,15 @@ the backend and uses a fixed sample output for presentation safety.
 
 - The model is trained for academic demonstration and is not cleared for
   clinical use under any regulatory framework.
-- **Melanoma recall is 54–59% across all four models** (54.8% ResNet50,
-  58.5% DenseNet121, 57.4% EfficientNet-B0, 56.9% MobileNetV3 Small) on the
-  HAM10000 test split. Roughly 4 in 10 melanoma cases are misclassified.
-  Improving this is the highest-priority remaining work and is surfaced
-  honestly in the Model Performance limitations card in the Flutter UI.
+- **Melanoma recall is 54–59% across all four baseline (v1) models** (54.8%
+  ResNet50, 58.5% DenseNet121, 57.4% EfficientNet-B0, 56.9% MobileNetV3 Small)
+  on the HAM10000 test split. Roughly 4 in 10 melanoma cases are misclassified.
+  The v2 ResNet50 (focal loss + balanced sampler) lifts mel recall to **73.4%**
+  and is available as a configurable production checkpoint
+  (`configs/ham10000.yaml` → `production.resnet50_checkpoint`); the figures
+  above remain the baseline the ensemble still uses. Improving recall further
+  is the highest-priority remaining work and is surfaced honestly in the Model
+  Performance limitations card in the Flutter UI.
 - HAM10000 is dominated by Fitzpatrick I–III skin types and dermoscopy
   images. Performance on darker skin tones, phone-camera images, or other
   populations is uncharacterised.
