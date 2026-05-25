@@ -2,6 +2,9 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../models/cam_ensemble_response.dart';
+import '../models/cam_response.dart';
+import '../models/ensemble_result.dart';
 import '../models/prediction_result.dart';
 import '../models/selected_image.dart';
 
@@ -38,6 +41,75 @@ class PredictionApi {
     }
 
     return PredictionResult.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<EnsembleResult> predictEnsemble(SelectedImage image) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$_cleanBaseUrl/predict-ensemble'),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'image',
+        image.bytes,
+        filename: image.name,
+      ),
+    );
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+    if (response.statusCode != 200) {
+      throw Exception(_formatError(response));
+    }
+    return EnsembleResult.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<CamResponse> predictCam(SelectedImage image) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$_cleanBaseUrl/predict-cam'),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'image',
+        image.bytes,
+        filename: image.name,
+      ),
+    );
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+    if (response.statusCode != 200) {
+      throw Exception(_formatError(response));
+    }
+    return CamResponse.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  /// Per-model Grad-CAM for the ensemble breakdown (Phase D.2). One call
+  /// returns all four overlays; the caller caches the result and shows each
+  /// model's heatmap in its expanded breakdown row.
+  Future<CamEnsembleResponse> fetchEnsembleCams(SelectedImage image) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$_cleanBaseUrl/predict-cam-ensemble'),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'image',
+        image.bytes,
+        filename: image.name,
+      ),
+    );
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+    if (response.statusCode != 200) {
+      throw Exception(_formatError(response));
+    }
+    return CamEnsembleResponse.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
   }

@@ -32,3 +32,34 @@ models:
 
 output:
   run_dir: runs
+
+ensemble:
+  version: ensemble-v1
+  weights:
+    resnet50: 0.38
+    densenet121: 0.37
+    efficientnet_b0: 0.20
+    mobilenetv3_small_100: 0.05
+  checkpoints:
+    resnet50: runs/resnet50/best.pt
+    densenet121: runs/densenet121/best.pt
+    efficientnet_b0: runs/efficientnet_b0/best.pt
+    mobilenetv3_small_100: runs/mobilenetv3_small_100/best.pt
+
+reproducibility:
+  # Mirrors the top-level `seed` above (kept for backward compat). This block is
+  # authoritative for new training runs: train.py prefers reproducibility.seed,
+  # falling back to the top-level seed, then 42. cudnn_deterministic trades a
+  # little GPU speed for exact run-to-run reproducibility and is why new runs may
+  # differ slightly from historical v1/v2 numbers. See docs/validation.md.
+  seed: 42
+  cudnn_deterministic: true
+
+production:
+  resnet50_checkpoint: resnet50_v2
+  notes: |
+    Phase C night 1 winner (focal loss gamma=2.0 + balanced sampler).
+    mel recall 73.40% vs v1 54.79% (+18.6 pp).
+    macro F1 70.08% vs v1 69.03% (+1.05 pp).
+    Calibration test ECE 0.0248 vs v1 0.0297 (slight improvement).
+    Toggle to "resnet50" to revert to v1 behaviour.

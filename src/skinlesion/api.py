@@ -1,15 +1,34 @@
 from __future__ import annotations
 
+import asyncio
+import base64
 import os
+import time
+import uuid
+from collections import Counter
 from io import BytesIO
 from pathlib import Path
 
+import numpy as np
 import torch
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
 
-from src.skinlesion.data import build_transform
+from src.skinlesion.cam import (
+    grad_cam,
+    overlay_heatmap,
+    target_layer_name,
+)
+from src.skinlesion.config import load_config
+from src.skinlesion.data import IMAGENET_MEAN, IMAGENET_STD, build_transform
+from src.skinlesion.ensemble import (
+    LoadedModel,
+    compute_ensemble,
+    load_calibration,
+    load_ensemble,
+    run_inference_single,
+)
 from src.skinlesion.models import create_model
 from src.skinlesion.train import select_device
 
@@ -23,13 +42,68 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MODEL_PATH = os.getenv("SKINLESION_MODEL_PATH", "runs/resnet50/best.pt")
+CONFIG_PATH = os.getenv("SKINLESION_CONFIG_PATH", "configs/ham10000.yaml")
+
+
+def resolve_resnet50_dir(config_path: str) -> Path:
+    """Resolve the deployed single-model ResNet50 directory from the
+    ``production`` block of the config (Phase C Stage A). The block lets us
+    A/B the Phase C focal+sampler winner (``resnet50_v2``) against v1
+    (``resnet50``) without touching code. Falls back to the v1 directory
+    when the block or key is absent — backwards compatible with
+    pre-Phase-C configs."""
+    try:
+        config = load_config(config_path)
+    except Exception:
+        config = {}
+    production_config = config.get("production", {}) or {}
+    resnet50_subdir = production_config.get("resnet50_checkpoint", "resnet50")
+    return Path(f"runs/{resnet50_subdir}")
+
+
+def resolve_resnet50_version(model_dir: Path) -> str:
+    """Report which ResNet50 generation is deployed. Prefers a ``VERSION``
+    file in the model directory; otherwise infers from the directory name."""
+    version_file = model_dir / "VERSION"
+    if version_file.exists():
+        return version_file.read_text(encoding="utf-8").strip()
+    name = model_dir.name
+    if name == "resnet50":
+        return "v1"
+    if "v2" in name:
+        return "v2-focal-sampler"
+    return name
+
+
+RESNET50_DIR = resolve_resnet50_dir(CONFIG_PATH)
+MODEL_PATH = os.getenv("SKINLESION_MODEL_PATH", f"{RESNET50_DIR.as_posix()}/best.pt")
 DEVICE = select_device(os.getenv("SKINLESION_DEVICE", "auto"))
 MODEL = None
 MODEL_NAME = None
 CLASSES: list[str] = []
 TRANSFORM = None
 LOAD_ERROR: str | None = None
+# Which ResNet50 generation the single-model path has loaded (Phase C Stage A).
+# "v1" = original; "v2-focal-sampler" = focal+balanced-sampler winner.
+RESNET50_VERSION: str = "v1"
+# Post-hoc calibration for the single-model /predict path. Mirrors the
+# per-model fields on LoadedModel for the ensemble path. Defaults match
+# "uncalibrated" so the API is backwards-compatible if no calibration
+# file is present alongside the checkpoint.
+SINGLE_TEMPERATURE: float = 1.0
+SINGLE_CALIBRATED: bool = False
+SINGLE_CALIBRATION: dict | None = None
+
+ENSEMBLE_MODELS: dict[str, LoadedModel] = {}
+ENSEMBLE_VERSION: str = "ensemble-v1"
+ENSEMBLE_LOAD_ERRORS: list[str] = []
+
+# Grad-CAM requires a backward pass through the deployed model.
+# Forward/backward hooks registered on the shared model layer would
+# race if two CAM requests ran concurrently, so all /predict-cam work
+# is serialised through this lock. Acceptable for a single-user demo;
+# document as a known limitation in CLAUDE.md.
+_CAM_LOCK = asyncio.Lock()
 
 MODEL_PERFORMANCE = [
     {"model": "MobileNetV3 Small", "test_accuracy": 0.6776, "macro_f1": 0.5726},
@@ -66,6 +140,9 @@ def root() -> dict[str, object]:
             "health": "/health",
             "model_info": "/model-info",
             "predict": "/predict",
+            "predict_ensemble": "/predict-ensemble",
+            "predict_cam": "/predict-cam",
+            "predict_cam_ensemble": "/predict-cam-ensemble",
             "docs": "/docs",
         },
         "disclaimer": "This result is for educational demonstration only and is not a medical diagnosis.",
@@ -75,6 +152,8 @@ def root() -> dict[str, object]:
 @app.on_event("startup")
 def load_model() -> None:
     global MODEL, MODEL_NAME, CLASSES, TRANSFORM, LOAD_ERROR
+    global SINGLE_TEMPERATURE, SINGLE_CALIBRATED, SINGLE_CALIBRATION
+    global RESNET50_VERSION
     checkpoint_path = Path(MODEL_PATH)
     if not checkpoint_path.exists():
         LOAD_ERROR = f"Checkpoint not found: {MODEL_PATH}"
@@ -94,12 +173,33 @@ def load_model() -> None:
         MODEL.load_state_dict(checkpoint["state_dict"])
         MODEL.eval()
         LOAD_ERROR = None
+        # Pick up post-hoc calibration if it has been fit (Phase A1).
+        SINGLE_TEMPERATURE, SINGLE_CALIBRATION = load_calibration(checkpoint_path)
+        SINGLE_CALIBRATED = SINGLE_CALIBRATION is not None
+        RESNET50_VERSION = resolve_resnet50_version(checkpoint_path.parent)
     except Exception as exc:
         MODEL = None
         MODEL_NAME = None
         CLASSES = []
         TRANSFORM = None
         LOAD_ERROR = f"Model loading failed: {exc}"
+        SINGLE_TEMPERATURE = 1.0
+        SINGLE_CALIBRATED = False
+        SINGLE_CALIBRATION = None
+
+
+@app.on_event("startup")
+def load_ensemble_models() -> None:
+    global ENSEMBLE_MODELS, ENSEMBLE_VERSION, ENSEMBLE_LOAD_ERRORS
+    try:
+        config = load_config(CONFIG_PATH)
+        ens_cfg: dict[str, object] = config.get("ensemble", {})
+        ENSEMBLE_VERSION = str(ens_cfg.get("version", "ensemble-v1"))
+        weights: dict[str, float] = ens_cfg.get("weights", {})
+        checkpoints: dict[str, str] = ens_cfg.get("checkpoints", {})
+        ENSEMBLE_MODELS, ENSEMBLE_LOAD_ERRORS = load_ensemble(checkpoints, weights, DEVICE)
+    except Exception as exc:
+        ENSEMBLE_LOAD_ERRORS = [f"Ensemble config error: {exc}"]
 
 
 @app.get("/health")
@@ -117,15 +217,39 @@ def health() -> dict[str, object]:
 
 @app.get("/model-info")
 def model_info() -> dict[str, object]:
+    ensemble_calibration = [
+        {
+            "model": loaded.display_name,
+            "calibrated": loaded.calibrated,
+            "temperature": round(loaded.temperature, 4),
+        }
+        for loaded in ENSEMBLE_MODELS.values()
+    ]
+    all_ensemble_calibrated = bool(ENSEMBLE_MODELS) and all(
+        m.calibrated for m in ENSEMBLE_MODELS.values()
+    )
     return {
         "default_model": "ResNet50",
         "loaded_model": display_model_name(MODEL_NAME),
         "raw_loaded_model": MODEL_NAME,
+        "resnet50_version": RESNET50_VERSION,
         "checkpoint": MODEL_PATH,
         "classes": CLASSES,
         "class_display_names": CLASS_DISPLAY_NAMES,
         "performance": MODEL_PERFORMANCE,
         "selection_reason": "ResNet50 achieved the best initial test accuracy and macro F1-score.",
+        "calibration": {
+            "single": {
+                "calibrated": SINGLE_CALIBRATED,
+                "temperature": round(SINGLE_TEMPERATURE, 4),
+                "method": (SINGLE_CALIBRATION or {}).get("method"),
+                "fit_split": (SINGLE_CALIBRATION or {}).get("split"),
+            },
+            "ensemble": {
+                "all_calibrated": all_ensemble_calibrated,
+                "per_model": ensemble_calibration,
+            },
+        },
         "disclaimer": "This result is for educational demonstration only and is not a medical diagnosis.",
     }
 
@@ -160,7 +284,13 @@ async def predict(image: UploadFile = File(...)) -> dict[str, object]:
     try:
         tensor = TRANSFORM(pil_image).unsqueeze(0).to(DEVICE)
         with torch.no_grad():
-            probabilities = torch.softmax(MODEL(tensor), dim=1).squeeze(0).detach().cpu()
+            logits = MODEL(tensor)
+            probabilities = (
+                torch.softmax(logits / SINGLE_TEMPERATURE, dim=1)
+                .squeeze(0)
+                .detach()
+                .cpu()
+            )
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -193,5 +323,360 @@ async def predict(image: UploadFile = File(...)) -> dict[str, object]:
         "confidence": predictions[0]["confidence"],
         "predictions": predictions,
         "top_candidates": top_candidates,
+        "calibrated": SINGLE_CALIBRATED,
+        "temperature": round(SINGLE_TEMPERATURE, 4),
         "disclaimer": "This result is for educational demonstration only and is not a medical diagnosis.",
+    }
+
+
+@app.post("/predict-ensemble")
+async def predict_ensemble(image: UploadFile = File(...)) -> dict[str, object]:
+    if not ENSEMBLE_MODELS:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "ensemble_unavailable",
+                "message": "No ensemble models loaded. " + "; ".join(ENSEMBLE_LOAD_ERRORS),
+            },
+        )
+
+    contents = await image.read()
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "empty_file", "message": "Uploaded image file is empty."},
+        )
+
+    try:
+        pil_image = Image.open(BytesIO(contents)).convert("RGB")
+        pil_image.load()
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_image", "message": "Uploaded file is not a valid image."},
+        ) from exc
+
+    request_id = str(uuid.uuid4())
+    t_start = time.perf_counter()
+
+    try:
+        prob_vectors: list[list[float]] = []
+        model_weights: list[float] = []
+        per_model: list[dict[str, object]] = []
+        classes: list[str] = []
+
+        for loaded in ENSEMBLE_MODELS.values():
+            if not classes:
+                classes = loaded.classes
+            tensor = loaded.transform(pil_image).unsqueeze(0).to(DEVICE)
+            probs, top_k = run_inference_single(loaded, tensor)
+            prob_vectors.append(probs)
+            model_weights.append(loaded.weight)
+            per_model.append({
+                "model": loaded.display_name,
+                "weight": loaded.weight,
+                "predicted_class": top_k[0]["label"],
+                "display_label": CLASS_DISPLAY_NAMES.get(top_k[0]["label"], top_k[0]["label"]),
+                "confidence": top_k[0]["confidence"],
+                "calibrated": loaded.calibrated,
+                "temperature": round(loaded.temperature, 4),
+                "predictions": [
+                    {
+                        "label": p["label"],
+                        "display_label": CLASS_DISPLAY_NAMES.get(p["label"], p["label"]),
+                        "confidence": p["confidence"],
+                    }
+                    for p in top_k
+                ],
+            })
+
+        ensemble_top = compute_ensemble(prob_vectors, model_weights, classes)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "inference_failed", "message": str(exc)},
+        ) from exc
+
+    inference_time_ms = round((time.perf_counter() - t_start) * 1000, 1)
+
+    ensemble_predictions = [
+        {
+            "label": p["label"],
+            "display_label": CLASS_DISPLAY_NAMES.get(p["label"], p["label"]),
+            "confidence": p["confidence"],
+        }
+        for p in ensemble_top
+    ]
+
+    top_classes = [m["predicted_class"] for m in per_model]
+    models_agree = len(set(top_classes)) == 1
+    agreement_note: str | None = None
+    if not models_agree:
+        counts = Counter(top_classes)
+        parts = [
+            f"{count}× {CLASS_DISPLAY_NAMES.get(cls, cls)}"
+            for cls, count in counts.most_common()
+        ]
+        agreement_note = "Models disagree. Top predictions: " + ", ".join(parts)
+
+    all_calibrated = bool(ENSEMBLE_MODELS) and all(
+        m.calibrated for m in ENSEMBLE_MODELS.values()
+    )
+
+    return {
+        "request_id": request_id,
+        "inference_time_ms": inference_time_ms,
+        "model_version": ENSEMBLE_VERSION,
+        "ensemble": {
+            "predicted_class": ensemble_predictions[0]["label"],
+            "display_label": ensemble_predictions[0]["display_label"],
+            "confidence": ensemble_predictions[0]["confidence"],
+            "predictions": ensemble_predictions,
+        },
+        "model_outputs": per_model,
+        "models_agree": models_agree,
+        "agreement_note": agreement_note,
+        "calibrated": all_calibrated,
+        "disclaimer": "This result is for research-grade diagnostic-support purposes only and is not a medical diagnosis.",
+    }
+
+
+@app.post("/predict-cam")
+async def predict_cam(image: UploadFile = File(...)) -> dict[str, object]:
+    """Grad-CAM overlay for the single-model (ResNet50) path.
+
+    Returns a base64-encoded PNG of the colour-blended heatmap overlay
+    plus prediction metadata. The overlay is pre-rendered server-side so
+    Flutter just decodes and displays. Ensemble-mode CAMs are out of
+    scope for this phase (B3).
+    """
+    if MODEL is None or MODEL_NAME is None:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "model_unavailable",
+                "message": LOAD_ERROR or "Single-model checkpoint not loaded.",
+            },
+        )
+
+    contents = await image.read()
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "empty_file", "message": "Uploaded image file is empty."},
+        )
+
+    try:
+        pil_image = (
+            Image.open(BytesIO(contents))
+            .convert("RGB")
+            .resize((224, 224), Image.BILINEAR)
+        )
+        pil_image.load()
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_image", "message": "Uploaded file is not a valid image."},
+        ) from exc
+
+    # Display copy (un-normalised, for overlay blend) and model input.
+    rgb01 = np.asarray(pil_image, dtype=np.float32) / 255.0
+    mean = np.asarray(IMAGENET_MEAN, dtype=np.float32)
+    std = np.asarray(IMAGENET_STD, dtype=np.float32)
+    normalised = (rgb01 - mean) / std
+    tensor = (
+        torch.from_numpy(normalised)
+        .permute(2, 0, 1)
+        .unsqueeze(0)
+        .to(DEVICE, dtype=torch.float32)
+    )
+
+    try:
+        # Serialise: forward/backward hooks on the shared model layer race.
+        async with _CAM_LOCK:
+            with grad_cam(MODEL, MODEL_NAME) as cam:
+                heatmap, target_class, _ = cam.compute(tensor)
+            # Confidence (calibrated, matching /predict).
+            with torch.no_grad():
+                probs = (
+                    torch.softmax(MODEL(tensor) / SINGLE_TEMPERATURE, dim=1)
+                    .squeeze(0)
+                    .detach()
+                    .cpu()
+                )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "cam_failed", "message": str(exc)},
+        ) from exc
+
+    overlay = overlay_heatmap(rgb01, heatmap, alpha=0.45, colormap="viridis")
+    overlay_u8 = np.clip(overlay * 255.0, 0, 255).astype(np.uint8)
+    buf = BytesIO()
+    Image.fromarray(overlay_u8).save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+
+    predicted_label = CLASSES[target_class]
+    return {
+        "model": display_model_name(MODEL_NAME),
+        "checkpoint": MODEL_PATH,
+        "predicted_class": predicted_label,
+        "display_label": CLASS_DISPLAY_NAMES.get(predicted_label, predicted_label),
+        "confidence": float(probs[target_class]),
+        "calibrated": SINGLE_CALIBRATED,
+        "temperature": round(SINGLE_TEMPERATURE, 4),
+        "method": "grad-cam",
+        "target_layer": target_layer_name(MODEL_NAME),
+        "image_size": 224,
+        "heatmap_png_b64": b64,
+        "disclaimer": (
+            "Grad-CAM shows which image regions most influenced the model's "
+            "predicted class. It is not a clinical region of interest and "
+            "does not validate the prediction."
+        ),
+    }
+
+
+@app.post("/predict-cam-ensemble")
+async def predict_cam_ensemble(image: UploadFile = File(...)) -> dict[str, object]:
+    """Per-model Grad-CAM across all four ensemble backbones (Phase D.2).
+
+    Returns the weighted-ensemble prediction plus one Grad-CAM overlay per
+    model (base64 PNG, 224x224), in the same order as ``/predict-ensemble``
+    (ResNet50, DenseNet121, EfficientNet-B0, MobileNetV3 Small). A single
+    model's Grad-CAM failure is isolated: that entry gets
+    ``heatmap_png_b64=null`` and an ``error`` string instead of failing the
+    whole request. All CAM work is serialised through ``_CAM_LOCK`` because
+    the forward/backward hooks on each shared model layer would race under
+    concurrent requests — same constraint as ``/predict-cam``.
+    """
+    if not ENSEMBLE_MODELS:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "ensemble_unavailable",
+                "message": "No ensemble models loaded. " + "; ".join(ENSEMBLE_LOAD_ERRORS),
+            },
+        )
+
+    contents = await image.read()
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "empty_file", "message": "Uploaded image file is empty."},
+        )
+
+    try:
+        pil_image = (
+            Image.open(BytesIO(contents))
+            .convert("RGB")
+            .resize((224, 224), Image.BILINEAR)
+        )
+        pil_image.load()
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_image", "message": "Uploaded file is not a valid image."},
+        ) from exc
+
+    # One shared overlay base (rgb01) and one normalised input tensor — every
+    # ensemble model uses 224x224 + ImageNet normalisation, so the same tensor
+    # feeds all four (matches the single-model /predict-cam preprocessing).
+    rgb01 = np.asarray(pil_image, dtype=np.float32) / 255.0
+    mean = np.asarray(IMAGENET_MEAN, dtype=np.float32)
+    std = np.asarray(IMAGENET_STD, dtype=np.float32)
+    normalised = (rgb01 - mean) / std
+    tensor = (
+        torch.from_numpy(normalised)
+        .permute(2, 0, 1)
+        .unsqueeze(0)
+        .to(DEVICE, dtype=torch.float32)
+    )
+
+    request_id = str(uuid.uuid4())
+    t_start = time.perf_counter()
+
+    classes: list[str] = []
+    prob_vectors: list[list[float]] = []
+    model_weights: list[float] = []
+    model_cams: list[dict[str, object]] = []
+
+    try:
+        # Serialise the whole compute: 4 forwards (prediction) + 4
+        # forward/backward passes (Grad-CAM) share the model graphs.
+        async with _CAM_LOCK:
+            for loaded in ENSEMBLE_MODELS.values():
+                if not classes:
+                    classes = loaded.classes
+                # Prediction (temperature-scaled). A failure here is fundamental
+                # and bubbles to a 500; only the Grad-CAM step below is isolated.
+                probs, top_k = run_inference_single(loaded, tensor)
+                prob_vectors.append(probs)
+                model_weights.append(loaded.weight)
+                predicted_label = top_k[0]["label"]
+
+                entry: dict[str, object] = {
+                    "model": loaded.display_name,
+                    "weight": loaded.weight,
+                    "target_layer": target_layer_name(loaded.name),
+                    "predicted_class": predicted_label,
+                    "display_label": CLASS_DISPLAY_NAMES.get(predicted_label, predicted_label),
+                    "confidence": top_k[0]["confidence"],
+                    "calibrated": loaded.calibrated,
+                    "temperature": round(loaded.temperature, 4),
+                    "image_size": "224x224",
+                    "heatmap_png_b64": None,
+                    "error": None,
+                }
+                try:
+                    with grad_cam(loaded.model, loaded.name) as cam:
+                        heatmap, _, _ = cam.compute(tensor)
+                    overlay = overlay_heatmap(rgb01, heatmap, alpha=0.45, colormap="viridis")
+                    overlay_u8 = np.clip(overlay * 255.0, 0, 255).astype(np.uint8)
+                    buf = BytesIO()
+                    Image.fromarray(overlay_u8).save(buf, format="PNG")
+                    entry["heatmap_png_b64"] = base64.b64encode(buf.getvalue()).decode("ascii")
+                except Exception as exc:  # noqa: BLE001 — isolate per-model CAM failure
+                    entry["error"] = str(exc)
+                model_cams.append(entry)
+
+            ensemble_top = compute_ensemble(prob_vectors, model_weights, classes)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "inference_failed", "message": str(exc)},
+        ) from exc
+
+    inference_time_ms = round((time.perf_counter() - t_start) * 1000, 1)
+
+    ensemble_predictions = [
+        {
+            "label": p["label"],
+            "display_label": CLASS_DISPLAY_NAMES.get(p["label"], p["label"]),
+            "confidence": p["confidence"],
+        }
+        for p in ensemble_top
+    ]
+    all_calibrated = bool(ENSEMBLE_MODELS) and all(
+        m.calibrated for m in ENSEMBLE_MODELS.values()
+    )
+
+    return {
+        "request_id": request_id,
+        "inference_time_ms": inference_time_ms,
+        "model_version": ENSEMBLE_VERSION,
+        "ensemble": {
+            "predicted_class": ensemble_predictions[0]["label"],
+            "display_label": ensemble_predictions[0]["display_label"],
+            "confidence": ensemble_predictions[0]["confidence"],
+            "predictions": ensemble_predictions,
+        },
+        "model_cams": model_cams,
+        "calibrated": all_calibrated,
+        "disclaimer": (
+            "Grad-CAM attention overlay per ensemble model. Each overlay shows "
+            "which image regions most influenced that model's predicted class — "
+            "not a clinical region of interest annotation, and it does not "
+            "validate the prediction."
+        ),
     }

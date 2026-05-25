@@ -51,6 +51,8 @@ class PredictionResult {
     required this.topCandidates,
     required this.disclaimer,
     required this.isMock,
+    this.calibrated = false,
+    this.temperature = 1.0,
   });
 
   final String model;
@@ -59,6 +61,11 @@ class PredictionResult {
   final List<PredictionCandidate> topCandidates;
   final String disclaimer;
   final bool isMock;
+  // Post-hoc temperature calibration (see docs/calibration_report.md).
+  // True when the backend applied a fitted temperature to logits; false
+  // when the model is running uncalibrated (no calibration.json present).
+  final bool calibrated;
+  final double temperature;
 
   factory PredictionResult.fromJson(Map<String, dynamic> json) {
     final rawCandidates =
@@ -78,6 +85,8 @@ class PredictionResult {
       disclaimer: (json['disclaimer'] as String?) ??
           'This result is for educational demonstration only and is not a medical diagnosis.',
       isMock: false,
+      calibrated: (json['calibrated'] as bool?) ?? false,
+      temperature: (json['temperature'] as num?)?.toDouble() ?? 1.0,
     );
   }
 
@@ -105,5 +114,7 @@ class PredictionResult {
     disclaimer:
         'This result is for educational demonstration only and is not a medical diagnosis.',
     isMock: true,
+    calibrated: true,
+    temperature: 1.539,
   );
 }

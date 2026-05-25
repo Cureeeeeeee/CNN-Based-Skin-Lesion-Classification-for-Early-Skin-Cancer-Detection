@@ -1,0 +1,117 @@
+{
+  "config_name": "v1_single_mobilenetv3_small_100",
+  "test_set": "isic_external",
+  "n_total": 4353,
+  "n_evaluated": 4353,
+  "n_skipped": 0,
+  "skipped_ids": [],
+  "members": [
+    {
+      "model": "mobilenetv3_small_100",
+      "checkpoint_dir": "runs/mobilenetv3_small_100",
+      "weight": 1.0,
+      "temperature": 1.6551,
+      "calibrated": true
+    }
+  ],
+  "accuracy": 0.36503560762692394,
+  "macro_f1": 0.2887431309120267,
+  "macro_recall": 0.32040100292529283,
+  "balanced_accuracy": 0.32040100292529283,
+  "ece": 0.1435120092837969,
+  "per_class_recall": {
+    "akiec": 0.23098591549295774,
+    "bcc": 0.5063437139561707,
+    "bkl": 0.34679334916864607,
+    "df": 0.17391304347826086,
+    "mel": 0.37973568281938325,
+    "nv": 0.31715652768284347,
+    "vasc": 0.2878787878787879
+  },
+  "mel_recall": 0.37973568281938325,
+  "bcc_recall": 0.5063437139561707,
+  "akiec_recall": 0.23098591549295774,
+  "true_label_counts": {
+    "akiec": 355,
+    "bcc": 867,
+    "bkl": 421,
+    "df": 46,
+    "mel": 1135,
+    "nv": 1463,
+    "vasc": 66
+  },
+  "predicted_label_counts": {
+    "akiec": 385,
+    "bcc": 1223,
+    "bkl": 924,
+    "df": 76,
+    "mel": 1019,
+    "nv": 576,
+    "vasc": 150
+  },
+  "confusion_matrix": [
+    [
+      82,
+      139,
+      53,
+      6,
+      53,
+      1,
+      21
+    ],
+    [
+      151,
+      439,
+      64,
+      31,
+      133,
+      9,
+      40
+    ],
+    [
+      30,
+      137,
+      146,
+      4,
+      64,
+      19,
+      21
+    ],
+    [
+      5,
+      12,
+      6,
+      8,
+      10,
+      2,
+      3
+    ],
+    [
+      57,
+      178,
+      361,
+      6,
+      431,
+      80,
+      22
+    ],
+    [
+      53,
+      303,
+      284,
+      18,
+      317,
+      464,
+      24
+    ],
+    [
+      7,
+      15,
+      10,
+      3,
+      11,
+      1,
+      19
+    ]
+  ]
+}

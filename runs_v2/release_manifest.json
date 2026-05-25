@@ -1,0 +1,37 @@
+{
+  "version": "v2.0",
+  "generated_at": "2026-05-25",
+  "note": "SHA256 + size of local checkpoints at release-prep time. After uploading to the GitHub Release, scripts/download_checkpoints.py verifies downloads against these hashes.",
+  "checkpoints": {
+    "runs/resnet50/best.pt": {
+      "sha256": "c7c2892c0a9b1687805d880744d90b725c54a0aa5497895199a42290f951cbd9",
+      "size_bytes": 94392749,
+      "description": "v1 baseline ResNet50 (ensemble member; pre-Phase-C deployed default)"
+    },
+    "runs/resnet50_v2/best.pt": {
+      "sha256": "076397dabde6845270ea31e65f951d46cc2e1709fa648f70586bd9fedaac6f3c",
+      "size_bytes": 94393389,
+      "description": "Phase C winner \u2014 focal loss + balanced sampler; CURRENT production single-model default (mel recall 73.40% HAM, T=0.898)"
+    },
+    "runs/resnet50_v1_backup/best.pt": {
+      "sha256": "c7c2892c0a9b1687805d880744d90b725c54a0aa5497895199a42290f951cbd9",
+      "size_bytes": 94392749,
+      "description": "byte-identical backup of runs/resnet50 for rollback"
+    },
+    "runs/densenet121/best.pt": {
+      "sha256": "566eadff0fb14af26117b84512984d6701e219e826d0855dc21622c996a6fb19",
+      "size_bytes": 28417722,
+      "description": "v1 ensemble member"
+    },
+    "runs/efficientnet_b0/best.pt": {
+      "sha256": "c3e08804baa85464d0920d647536474a0fc37eac646ce9ae888dbdbc223a9294",
+      "size_bytes": 16342245,
+      "description": "v1 ensemble member"
+    },
+    "runs/mobilenetv3_small_100/best.pt": {
+      "sha256": "0821442100e67682bec13f2d99221d55777fe064c6fe28234bc1efc33d65087f",
+      "size_bytes": 6223337,
+      "description": "v1 ensemble member"
+    }
+  }
+}

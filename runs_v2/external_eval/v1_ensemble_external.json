@@ -1,0 +1,138 @@
+{
+  "config_name": "v1_ensemble",
+  "test_set": "isic_external",
+  "n_total": 4353,
+  "n_evaluated": 4353,
+  "n_skipped": 0,
+  "skipped_ids": [],
+  "members": [
+    {
+      "model": "resnet50",
+      "checkpoint_dir": "runs/resnet50",
+      "weight": 0.38,
+      "temperature": 1.5391,
+      "calibrated": true
+    },
+    {
+      "model": "densenet121",
+      "checkpoint_dir": "runs/densenet121",
+      "weight": 0.37,
+      "temperature": 1.689,
+      "calibrated": true
+    },
+    {
+      "model": "efficientnet_b0",
+      "checkpoint_dir": "runs/efficientnet_b0",
+      "weight": 0.2,
+      "temperature": 2.0267,
+      "calibrated": true
+    },
+    {
+      "model": "mobilenetv3_small_100",
+      "checkpoint_dir": "runs/mobilenetv3_small_100",
+      "weight": 0.05,
+      "temperature": 1.6551,
+      "calibrated": true
+    }
+  ],
+  "accuracy": 0.5371008499885137,
+  "macro_f1": 0.4124136289627196,
+  "macro_recall": 0.4534344739956195,
+  "balanced_accuracy": 0.4534344739956195,
+  "ece": 0.04712670256007533,
+  "per_class_recall": {
+    "akiec": 0.1323943661971831,
+    "bcc": 0.5767012687427913,
+    "bkl": 0.517814726840855,
+    "df": 0.32608695652173914,
+    "mel": 0.28634361233480177,
+    "nv": 0.8195488721804511,
+    "vasc": 0.5151515151515151
+  },
+  "mel_recall": 0.28634361233480177,
+  "bcc_recall": 0.5767012687427913,
+  "akiec_recall": 0.1323943661971831,
+  "true_label_counts": {
+    "akiec": 355,
+    "bcc": 867,
+    "bkl": 421,
+    "df": 46,
+    "mel": 1135,
+    "nv": 1463,
+    "vasc": 66
+  },
+  "predicted_label_counts": {
+    "akiec": 141,
+    "bcc": 847,
+    "bkl": 973,
+    "df": 57,
+    "mel": 412,
+    "nv": 1797,
+    "vasc": 126
+  },
+  "confusion_matrix": [
+    [
+      47,
+      107,
+      148,
+      2,
+      6,
+      30,
+      15
+    ],
+    [
+      61,
+      500,
+      103,
+      16,
+      22,
+      136,
+      29
+    ],
+    [
+      3,
+      68,
+      218,
+      6,
+      21,
+      95,
+      10
+    ],
+    [
+      1,
+      11,
+      2,
+      15,
+      1,
+      16,
+      0
+    ],
+    [
+      21,
+      68,
+      362,
+      7,
+      325,
+      316,
+      36
+    ],
+    [
+      7,
+      83,
+      134,
+      10,
+      28,
+      1199,
+      2
+    ],
+    [
+      1,
+      10,
+      6,
+      1,
+      9,
+      5,
+      34
+    ]
+  ]
+}

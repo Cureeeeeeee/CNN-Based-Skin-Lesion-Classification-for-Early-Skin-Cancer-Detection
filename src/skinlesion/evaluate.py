@@ -21,6 +21,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", required=True)
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--split", default="test", choices=["train", "val", "test"])
+    parser.add_argument(
+        "--exp-name",
+        help="Optional experiment name to disambiguate the metrics output "
+        "directory; defaults to model name. Use to keep metrics next to the "
+        "right checkpoint when multiple variants share an architecture, e.g., "
+        "--model resnet50 --exp-name resnet50_v2_focal.",
+    )
     return parser.parse_args()
 
 
@@ -58,7 +65,10 @@ def main() -> None:
             y_true.extend(labels.tolist())
 
     metrics = summarize_classification(y_true, y_pred, classes)
-    run_dir = Path(config["output"]["run_dir"]) / args.model
+    # exp_name defaults to model_name (backward compat); set it to write metrics
+    # next to a variant checkpoint instead of runs/<model_name>/.
+    exp_name = args.exp_name or args.model
+    run_dir = Path(config["output"]["run_dir"]) / exp_name
     run_dir.mkdir(parents=True, exist_ok=True)
 
     metrics_path = run_dir / f"{args.split}_metrics.json"

@@ -1,0 +1,117 @@
+{
+  "config_name": "v1_single_resnet50",
+  "test_set": "ham_test",
+  "n_total": 1734,
+  "n_evaluated": 1734,
+  "n_skipped": 0,
+  "skipped_ids": [],
+  "members": [
+    {
+      "model": "resnet50",
+      "checkpoint_dir": "runs/resnet50_v1_backup",
+      "weight": 1.0,
+      "temperature": 1.5391,
+      "calibrated": true
+    }
+  ],
+  "accuracy": 0.8021914648212226,
+  "macro_f1": 0.690290319427113,
+  "macro_recall": 0.757476583724536,
+  "balanced_accuracy": 0.757476583724536,
+  "ece": 0.01833853065417576,
+  "per_class_recall": {
+    "akiec": 0.5961538461538461,
+    "bcc": 0.8681318681318682,
+    "bkl": 0.6582914572864321,
+    "df": 0.8,
+    "mel": 0.5478723404255319,
+    "nv": 0.8689236111111112,
+    "vasc": 0.9629629629629629
+  },
+  "mel_recall": 0.5478723404255319,
+  "bcc_recall": 0.8681318681318682,
+  "akiec_recall": 0.5961538461538461,
+  "true_label_counts": {
+    "akiec": 52,
+    "bcc": 91,
+    "bkl": 199,
+    "df": 25,
+    "mel": 188,
+    "nv": 1152,
+    "vasc": 27
+  },
+  "predicted_label_counts": {
+    "akiec": 70,
+    "bcc": 146,
+    "bkl": 199,
+    "df": 27,
+    "mel": 197,
+    "nv": 1056,
+    "vasc": 39
+  },
+  "confusion_matrix": [
+    [
+      31,
+      17,
+      2,
+      0,
+      1,
+      1,
+      0
+    ],
+    [
+      2,
+      79,
+      1,
+      2,
+      3,
+      2,
+      2
+    ],
+    [
+      25,
+      15,
+      131,
+      2,
+      13,
+      13,
+      0
+    ],
+    [
+      1,
+      1,
+      0,
+      20,
+      2,
+      1,
+      0
+    ],
+    [
+      8,
+      11,
+      22,
+      0,
+      103,
+      38,
+      6
+    ],
+    [
+      3,
+      23,
+      43,
+      3,
+      74,
+      1001,
+      5
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      26
+    ]
+  ]
+}
