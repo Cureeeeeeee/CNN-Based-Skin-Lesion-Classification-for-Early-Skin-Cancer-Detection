@@ -471,9 +471,12 @@ class _AttentionCard extends StatelessWidget {
           ),
           SizedBox(height: AppSpacing.sm),
           Text(
-            'Currently available for the single-model (ResNet50) path only. '
-            'Ensemble-mode attention maps are not yet implemented. The '
-            'overlay is rendered server-side and decoded by the client.',
+            'Available in two places: the single-model (ResNet50) image-card '
+            'toggle, and — new — per-model attention in ensemble mode. Expand '
+            'any model in the breakdown to load that model\'s overlay (all four '
+            'are fetched together once and cached). Each backbone uses its own '
+            'deepest spatial layer. Overlays are rendered server-side and '
+            'decoded by the client.',
             style: AppText.captionMuted,
           ),
         ],

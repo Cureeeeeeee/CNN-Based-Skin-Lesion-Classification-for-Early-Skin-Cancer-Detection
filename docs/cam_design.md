@@ -37,16 +37,15 @@ All four backbones produce a 7×7 feature map at the layer chosen below (32× sp
 | EfficientNet-B0 | `model.blocks[-1]` | 7×7 | Last MBConv block (the timm `blocks` list has 7 entries; index `-1` is the deepest). |
 | MobileNetV3 Small | `model.blocks[-1]` | 7×7 | Same convention as EfficientNet (timm `blocks` list has 6 entries). |
 
-Single source of truth: `resolve_target_layer()` in `src/skinlesion/cam.py`. Adding a new architecture requires one entry there.
+Single source of truth: the `CAM_TARGET_LAYERS` dict in `src/skinlesion/cam.py` maps each `model_name` (as it appears in `configs/ham10000.yaml`) to a dotted/bracketed module path (`"layer4"`, `"features.denseblock4"`, `"blocks[-1]"`). `resolve_target_layer()` reads that dict and traverses the path generically (supporting both attribute access and integer indices). Adding a new architecture requires one dict entry. For an *unregistered* model it falls back to `model.features[-1]` or the last `Conv2d` with a `RuntimeWarning`, raising `ValueError` only if nothing resolvable is found. The four registered output shapes were verified against the live model graphs (forward-hook output shapes, 2026-05-25): ResNet50 `[1,2048,7,7]`, DenseNet121 `[1,1024,7,7]`, EfficientNet-B0 `[1,320,7,7]`, MobileNetV3 Small `[1,576,7,7]`.
 
 ### Why not hook `conv_head` / `features.norm5`?
 
-For EfficientNet and MobileNetV3, timm models have a `conv_head` 1×1 expansion after the final MBConv block. For DenseNet, there's a final `features.norm5` (BatchNorm) after the last dense block. Hooking these "post-block" layers is also valid Grad-CAM, but:
-- They are essentially channel-mixing layers — the spatial information is identical to the preceding block's output.
-- Hooking the deepest **conv-like** layer (rather than a pure 1×1/BN) is the more conventional choice in the literature.
-- Keeping the convention uniform across architectures makes the per-model heatmaps comparable.
+For DenseNet, there's a final `features.norm5` (BatchNorm) after the last dense block; hooking it is valid Grad-CAM but it is a pure channel/BN layer with the same 7×7 spatial structure as `denseblock4`, so we hook the deeper conv-like block instead. The two timm nets differ and the distinction matters (verified on the live graphs):
+- **EfficientNet-B0:** `conv_head` is a 1×1 expansion *before* global pooling, output `[1,1280,7,7]` — still spatial, so it is an equally valid alternative target. We keep `blocks[-1]` for consistency.
+- **MobileNetV3 Small:** `conv_head` runs *after* `global_pool`, output `[1,1024,1,1]` — it carries **no spatial signal** and is therefore useless for localisation. `blocks[-1]` (`[1,576,7,7]`) is the only correct spatial target, which is why we standardise on `blocks[-1]` across both timm backbones.
 
-If we ever find a model where the post-block layer gives meaningfully different results, that's a per-model override in `resolve_target_layer()`.
+Keeping the convention uniform (deepest spatial block stage) across architectures makes the per-model heatmaps comparable. If a model ever needs the post-block layer, that's a one-line change to `CAM_TARGET_LAYERS`.
 
 ## Sample heatmaps — clinical interpretation
 

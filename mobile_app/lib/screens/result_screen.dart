@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../models/cam_ensemble_response.dart';
 import '../models/ensemble_result.dart';
 import '../models/prediction_result.dart';
 import '../models/selected_image.dart';
@@ -61,6 +62,14 @@ class _ResultScreenState extends State<ResultScreen> {
   bool get _camAvailable =>
       !_isEnsemble &&
       !_isMock &&
+      widget.apiBaseUrl != null &&
+      widget.apiBaseUrl!.isNotEmpty;
+
+  /// Per-model Grad-CAM in the ensemble breakdown is offered only in ensemble
+  /// API mode. A null/empty base URL (e.g. the offline mock ensemble) disables
+  /// it. Additive to the single-model attention toggle, which is unchanged.
+  bool get _ensembleCamAvailable =>
+      _isEnsemble &&
       widget.apiBaseUrl != null &&
       widget.apiBaseUrl!.isNotEmpty;
 
@@ -237,6 +246,9 @@ class _ResultScreenState extends State<ResultScreen> {
                   _ModelBreakdownCard(
                     outputs: widget.ensembleResult!.modelOutputs,
                     ensembleTopClass: _topClass,
+                    selectedImage: widget.selectedImage,
+                    apiBaseUrl: widget.apiBaseUrl,
+                    camAvailable: _ensembleCamAvailable,
                   ),
                 ],
                 const SizedBox(height: AppSpacing.md),
@@ -869,18 +881,63 @@ class _DifferentialRow extends StatelessWidget {
 
 // ── Model breakdown ───────────────────────────────────────────────────────────
 
-class _ModelBreakdownCard extends StatelessWidget {
+class _ModelBreakdownCard extends StatefulWidget {
   const _ModelBreakdownCard({
     required this.outputs,
     required this.ensembleTopClass,
+    required this.selectedImage,
+    required this.apiBaseUrl,
+    required this.camAvailable,
   });
 
   final List<ModelPrediction> outputs;
   final String ensembleTopClass;
+  final SelectedImage selectedImage;
+  final String? apiBaseUrl;
+  final bool camAvailable;
+
+  @override
+  State<_ModelBreakdownCard> createState() => _ModelBreakdownCardState();
+}
+
+class _ModelBreakdownCardState extends State<_ModelBreakdownCard> {
+  // A single /predict-cam-ensemble call serves every row; cached here so that
+  // expanding more rows after the first does not re-fetch. Lazily triggered by
+  // the first row expansion (Phase D.3).
+  CamEnsembleResponse? _cams;
+  bool _loading = false;
+  String? _error;
+  bool _fetchStarted = false;
+
+  Future<void> _ensureCams() async {
+    if (!widget.camAvailable || _fetchStarted) return;
+    _fetchStarted = true;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final cams = await PredictionApi(baseUrl: widget.apiBaseUrl!)
+          .fetchEnsembleCams(widget.selectedImage);
+      if (!mounted) return;
+      setState(() {
+        _cams = cams;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+        _fetchStarted = false; // allow a retry on the next expand
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final sorted = [...outputs]..sort((a, b) => b.weight.compareTo(a.weight));
+    final sorted = [...widget.outputs]
+      ..sort((a, b) => b.weight.compareTo(a.weight));
     return StandardCard(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
@@ -900,7 +957,12 @@ class _ModelBreakdownCard extends StatelessWidget {
             if (i > 0) const Divider(height: 1),
             _ModelRow(
               output: sorted[i],
-              agrees: sorted[i].predictedClass == ensembleTopClass,
+              agrees: sorted[i].predictedClass == widget.ensembleTopClass,
+              camAvailable: widget.camAvailable,
+              onExpand: _ensureCams,
+              camLoading: _loading,
+              camError: _error,
+              modelCam: _cams?.camFor(sorted[i].model),
             ),
           ],
         ],
@@ -910,10 +972,26 @@ class _ModelBreakdownCard extends StatelessWidget {
 }
 
 class _ModelRow extends StatefulWidget {
-  const _ModelRow({required this.output, required this.agrees});
+  const _ModelRow({
+    required this.output,
+    required this.agrees,
+    this.camAvailable = false,
+    this.onExpand,
+    this.camLoading = false,
+    this.camError,
+    this.modelCam,
+  });
 
   final ModelPrediction output;
   final bool agrees;
+  // Per-model Grad-CAM (ensemble API mode only). When [camAvailable], the first
+  // expansion triggers [onExpand]; the resulting [modelCam]/[camLoading]/
+  // [camError] are supplied by the parent breakdown card (shared fetch).
+  final bool camAvailable;
+  final VoidCallback? onExpand;
+  final bool camLoading;
+  final String? camError;
+  final ModelCam? modelCam;
 
   @override
   State<_ModelRow> createState() => _ModelRowState();
@@ -921,6 +999,14 @@ class _ModelRow extends StatefulWidget {
 
 class _ModelRowState extends State<_ModelRow> {
   bool _expanded = false;
+
+  void _toggle() {
+    final willExpand = !_expanded;
+    setState(() => _expanded = willExpand);
+    if (willExpand && widget.camAvailable) {
+      widget.onExpand?.call();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -931,7 +1017,7 @@ class _ModelRowState extends State<_ModelRow> {
     return Column(
       children: [
         InkWell(
-          onTap: () => setState(() => _expanded = !_expanded),
+          onTap: _toggle,
           borderRadius: BorderRadius.circular(AppRadius.sm),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
@@ -1081,11 +1167,94 @@ class _ModelRowState extends State<_ModelRow> {
                       ],
                     ),
                   ),
+                if (widget.camAvailable) _buildCam(),
               ],
             ),
           ),
         ),
       ],
+    );
+  }
+
+  /// Per-model Grad-CAM block shown in the expanded row (ensemble API mode).
+  /// Data comes from the parent breakdown card's shared, cached fetch.
+  Widget _buildCam() {
+    final cam = widget.modelCam;
+    Widget content;
+    if (cam != null && cam.hasHeatmap) {
+      content = Column(
+        children: [
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                child: AspectRatio(
+                  aspectRatio: 1.0,
+                  child: Image.memory(
+                    cam.heatmapBytes!,
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Attention: ${widget.output.model}',
+            style: AppText.captionMuted,
+          ),
+        ],
+      );
+    } else if (cam != null || widget.camError != null) {
+      // Per-model server-side CAM failure, or whole-request fetch failure.
+      content = const _CamUnavailable();
+    } else if (widget.camLoading) {
+      content = const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: AppSpacing.sm),
+            Text('Loading attention…', style: AppText.captionMuted),
+          ],
+        ),
+      );
+    } else {
+      content = const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: content,
+    );
+  }
+}
+
+class _CamUnavailable extends StatelessWidget {
+  const _CamUnavailable();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.image_not_supported_outlined,
+            size: 13,
+            color: AppColors.textTertiary,
+          ),
+          SizedBox(width: 5),
+          Text('Heatmap unavailable', style: AppText.captionMuted),
+        ],
+      ),
     );
   }
 }

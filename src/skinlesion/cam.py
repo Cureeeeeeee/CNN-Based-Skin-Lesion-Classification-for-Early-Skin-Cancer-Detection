@@ -18,6 +18,8 @@ result-screen card and Safety/About copy state this explicitly.
 """
 from __future__ import annotations
 
+import re
+import warnings
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -37,32 +39,87 @@ from torch import nn
 # ── Per-architecture target layers ────────────────────────────────────────────
 #
 # Selvaraju et al. recommend hooking the deepest convolutional layer that
-# retains spatial resolution. For a 224x224 input, all four backbones we
-# use produce a 7x7 feature map at this layer (32x downsample).
+# retains spatial resolution. For a 224x224 input, all four backbones we use
+# produce a 7x7 feature map at the registered layer (32x downsample). Verified
+# against the actual model graphs (forward-hook output shapes) on 2026-05-25:
+#   resnet50               layer4               -> [1, 2048, 7, 7]
+#   densenet121            features.denseblock4 -> [1, 1024, 7, 7]
+#   efficientnet_b0 (timm) blocks[-1]           -> [1,  320, 7, 7]
+#   mobilenetv3_small_100  blocks[-1]           -> [1,  576, 7, 7]
+#
+# timm note: we standardise on blocks[-1] (the last block stage) for both timm
+# nets. EfficientNet's conv_head ([1,1280,7,7]) is an equally valid spatial
+# alternative, but MobileNetV3's conv_head runs *after* global pooling
+# ([1,1024,1,1]) and so carries no spatial signal — blocks[-1] is the only
+# correct localisation target there, so blocks[-1] is used for both for
+# consistency. Keys match the model names in configs/ham10000.yaml.
+CAM_TARGET_LAYERS: dict[str, str] = {
+    "resnet50": "layer4",
+    "densenet121": "features.denseblock4",
+    "efficientnet_b0": "blocks[-1]",
+    "mobilenetv3_small_100": "blocks[-1]",
+}
+
+
+def _resolve_module_path(model: nn.Module, path: str) -> nn.Module:
+    """Traverse a dotted/bracketed module path and return the addressed
+    submodule, e.g. 'layer4', 'features.denseblock4', or 'blocks[-1]'."""
+    module: object = model
+    for token in re.findall(r"\[-?\d+\]|[^.\[\]]+", path):
+        if token.startswith("[") and token.endswith("]"):
+            module = module[int(token[1:-1])]  # Sequential / ModuleList index
+        else:
+            module = getattr(module, token)
+    return module  # type: ignore[return-value]
+
+
+def _fallback_target_layer(model: nn.Module) -> nn.Module | None:
+    """Best-effort target for an unregistered architecture: the last child of
+    `model.features` if present, otherwise the last Conv2d in the graph."""
+    features = getattr(model, "features", None)
+    if features is not None:
+        try:
+            return features[-1]
+        except (TypeError, IndexError, KeyError):
+            pass
+    last_conv: nn.Module | None = None
+    for module in model.modules():
+        if isinstance(module, nn.Conv2d):
+            last_conv = module
+    return last_conv
 
 
 def resolve_target_layer(model: nn.Module, model_name: str) -> nn.Module:
-    """Return the module to hook for a given timm backbone."""
-    if model_name == "resnet50":
-        return model.layer4
-    if model_name == "densenet121":
-        return model.features.denseblock4
-    if model_name in ("efficientnet_b0", "mobilenetv3_small_100"):
-        return model.blocks[-1]
-    raise ValueError(
-        f"No Grad-CAM target layer registered for model '{model_name}'. "
-        "Add it to resolve_target_layer() in src/skinlesion/cam.py."
+    """Return the module to hook for Grad-CAM on a given backbone.
+
+    Looks ``model_name`` up in CAM_TARGET_LAYERS and traverses to the module.
+    For an unregistered name, falls back to ``model.features[-1]`` or the last
+    Conv2d (emitting a warning); raises ValueError only if nothing resolvable.
+    """
+    path = CAM_TARGET_LAYERS.get(model_name)
+    if path is not None:
+        return _resolve_module_path(model, path)
+    warnings.warn(
+        f"No Grad-CAM target layer registered for model '{model_name}'; "
+        "falling back to a heuristic (model.features[-1] or last Conv2d). "
+        "Register it in CAM_TARGET_LAYERS in src/skinlesion/cam.py for a "
+        "deterministic choice.",
+        RuntimeWarning,
+        stacklevel=2,
     )
+    fallback = _fallback_target_layer(model)
+    if fallback is None:
+        raise ValueError(
+            f"No Grad-CAM target layer registered for model '{model_name}' and "
+            "no fallback Conv2d/features layer could be found. Add it to "
+            "CAM_TARGET_LAYERS in src/skinlesion/cam.py."
+        )
+    return fallback
 
 
 def target_layer_name(model_name: str) -> str:
     """Human-readable target-layer label for telemetry / responses."""
-    return {
-        "resnet50": "layer4",
-        "densenet121": "features.denseblock4",
-        "efficientnet_b0": "blocks[-1]",
-        "mobilenetv3_small_100": "blocks[-1]",
-    }.get(model_name, "unknown")
+    return CAM_TARGET_LAYERS.get(model_name, "unknown")
 
 
 # ── Grad-CAM core ─────────────────────────────────────────────────────────────

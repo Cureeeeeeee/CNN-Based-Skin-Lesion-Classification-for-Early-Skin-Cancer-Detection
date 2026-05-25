@@ -140,6 +140,9 @@ def root() -> dict[str, object]:
             "health": "/health",
             "model_info": "/model-info",
             "predict": "/predict",
+            "predict_ensemble": "/predict-ensemble",
+            "predict_cam": "/predict-cam",
+            "predict_cam_ensemble": "/predict-cam-ensemble",
             "docs": "/docs",
         },
         "disclaimer": "This result is for educational demonstration only and is not a medical diagnosis.",
@@ -530,5 +533,150 @@ async def predict_cam(image: UploadFile = File(...)) -> dict[str, object]:
             "Grad-CAM shows which image regions most influenced the model's "
             "predicted class. It is not a clinical region of interest and "
             "does not validate the prediction."
+        ),
+    }
+
+
+@app.post("/predict-cam-ensemble")
+async def predict_cam_ensemble(image: UploadFile = File(...)) -> dict[str, object]:
+    """Per-model Grad-CAM across all four ensemble backbones (Phase D.2).
+
+    Returns the weighted-ensemble prediction plus one Grad-CAM overlay per
+    model (base64 PNG, 224x224), in the same order as ``/predict-ensemble``
+    (ResNet50, DenseNet121, EfficientNet-B0, MobileNetV3 Small). A single
+    model's Grad-CAM failure is isolated: that entry gets
+    ``heatmap_png_b64=null`` and an ``error`` string instead of failing the
+    whole request. All CAM work is serialised through ``_CAM_LOCK`` because
+    the forward/backward hooks on each shared model layer would race under
+    concurrent requests — same constraint as ``/predict-cam``.
+    """
+    if not ENSEMBLE_MODELS:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "ensemble_unavailable",
+                "message": "No ensemble models loaded. " + "; ".join(ENSEMBLE_LOAD_ERRORS),
+            },
+        )
+
+    contents = await image.read()
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "empty_file", "message": "Uploaded image file is empty."},
+        )
+
+    try:
+        pil_image = (
+            Image.open(BytesIO(contents))
+            .convert("RGB")
+            .resize((224, 224), Image.BILINEAR)
+        )
+        pil_image.load()
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_image", "message": "Uploaded file is not a valid image."},
+        ) from exc
+
+    # One shared overlay base (rgb01) and one normalised input tensor — every
+    # ensemble model uses 224x224 + ImageNet normalisation, so the same tensor
+    # feeds all four (matches the single-model /predict-cam preprocessing).
+    rgb01 = np.asarray(pil_image, dtype=np.float32) / 255.0
+    mean = np.asarray(IMAGENET_MEAN, dtype=np.float32)
+    std = np.asarray(IMAGENET_STD, dtype=np.float32)
+    normalised = (rgb01 - mean) / std
+    tensor = (
+        torch.from_numpy(normalised)
+        .permute(2, 0, 1)
+        .unsqueeze(0)
+        .to(DEVICE, dtype=torch.float32)
+    )
+
+    request_id = str(uuid.uuid4())
+    t_start = time.perf_counter()
+
+    classes: list[str] = []
+    prob_vectors: list[list[float]] = []
+    model_weights: list[float] = []
+    model_cams: list[dict[str, object]] = []
+
+    try:
+        # Serialise the whole compute: 4 forwards (prediction) + 4
+        # forward/backward passes (Grad-CAM) share the model graphs.
+        async with _CAM_LOCK:
+            for loaded in ENSEMBLE_MODELS.values():
+                if not classes:
+                    classes = loaded.classes
+                # Prediction (temperature-scaled). A failure here is fundamental
+                # and bubbles to a 500; only the Grad-CAM step below is isolated.
+                probs, top_k = run_inference_single(loaded, tensor)
+                prob_vectors.append(probs)
+                model_weights.append(loaded.weight)
+                predicted_label = top_k[0]["label"]
+
+                entry: dict[str, object] = {
+                    "model": loaded.display_name,
+                    "weight": loaded.weight,
+                    "target_layer": target_layer_name(loaded.name),
+                    "predicted_class": predicted_label,
+                    "display_label": CLASS_DISPLAY_NAMES.get(predicted_label, predicted_label),
+                    "confidence": top_k[0]["confidence"],
+                    "calibrated": loaded.calibrated,
+                    "temperature": round(loaded.temperature, 4),
+                    "image_size": "224x224",
+                    "heatmap_png_b64": None,
+                    "error": None,
+                }
+                try:
+                    with grad_cam(loaded.model, loaded.name) as cam:
+                        heatmap, _, _ = cam.compute(tensor)
+                    overlay = overlay_heatmap(rgb01, heatmap, alpha=0.45, colormap="viridis")
+                    overlay_u8 = np.clip(overlay * 255.0, 0, 255).astype(np.uint8)
+                    buf = BytesIO()
+                    Image.fromarray(overlay_u8).save(buf, format="PNG")
+                    entry["heatmap_png_b64"] = base64.b64encode(buf.getvalue()).decode("ascii")
+                except Exception as exc:  # noqa: BLE001 — isolate per-model CAM failure
+                    entry["error"] = str(exc)
+                model_cams.append(entry)
+
+            ensemble_top = compute_ensemble(prob_vectors, model_weights, classes)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "inference_failed", "message": str(exc)},
+        ) from exc
+
+    inference_time_ms = round((time.perf_counter() - t_start) * 1000, 1)
+
+    ensemble_predictions = [
+        {
+            "label": p["label"],
+            "display_label": CLASS_DISPLAY_NAMES.get(p["label"], p["label"]),
+            "confidence": p["confidence"],
+        }
+        for p in ensemble_top
+    ]
+    all_calibrated = bool(ENSEMBLE_MODELS) and all(
+        m.calibrated for m in ENSEMBLE_MODELS.values()
+    )
+
+    return {
+        "request_id": request_id,
+        "inference_time_ms": inference_time_ms,
+        "model_version": ENSEMBLE_VERSION,
+        "ensemble": {
+            "predicted_class": ensemble_predictions[0]["label"],
+            "display_label": ensemble_predictions[0]["display_label"],
+            "confidence": ensemble_predictions[0]["confidence"],
+            "predictions": ensemble_predictions,
+        },
+        "model_cams": model_cams,
+        "calibrated": all_calibrated,
+        "disclaimer": (
+            "Grad-CAM attention overlay per ensemble model. Each overlay shows "
+            "which image regions most influenced that model's predicted class — "
+            "not a clinical region of interest annotation, and it does not "
+            "validate the prediction."
         ),
     }
