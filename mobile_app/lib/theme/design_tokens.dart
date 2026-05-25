@@ -20,6 +20,11 @@
 import 'package:flutter/material.dart';
 
 abstract class DSColors {
+  // Typography — Inter is bundled in assets/fonts/ and registered
+  // in pubspec.yaml. Falls back to system sans-serif if the asset
+  // is removed.
+  static const String fontFamily = 'Inter';
+
   // Primary (clinical green-blue)
   static const primary50 = Color(0xFFE8F4F1);
   static const primary100 = Color(0xFFC5E4DD);

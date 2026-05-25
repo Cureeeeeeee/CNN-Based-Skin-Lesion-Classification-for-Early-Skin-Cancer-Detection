@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: "If you use this software or its released model weights, please cite as below."
+type: software
+title: "DermaSense — CNN-Based Skin Lesion Classification for Early Skin Cancer Detection"
+abstract: >
+  A research-grade skin lesion diagnostic-support prototype combining a
+  4-model CNN ensemble with post-hoc temperature-scaled probability
+  calibration, Grad-CAM saliency explainability, and a clinical-style
+  Flutter user interface. Trained on HAM10000 with external validation
+  on an ISIC 2019 HAM-disjoint subset.
+authors:
+  - family-names: Liu
+    given-names: Jiahao
+    affiliation: "University of Technology Sydney"
+repository-code: "https://github.com/Cureeeeeeee/CNN-Based-Skin-Lesion-Classification-for-Early-Skin-Cancer-Detection"
+url: "https://github.com/Cureeeeeeee/CNN-Based-Skin-Lesion-Classification-for-Early-Skin-Cancer-Detection"
+version: "2.1"
+date-released: 2026-05-25
+license: MIT
+license-url: "https://github.com/Cureeeeeeee/CNN-Based-Skin-Lesion-Classification-for-Early-Skin-Cancer-Detection/blob/main/LICENSE"
+keywords:
+  - skin-lesion-classification
+  - HAM10000
+  - ISIC-2019
+  - CNN
+  - transfer-learning
+  - temperature-scaling
+  - calibration
+  - ensemble
+  - Grad-CAM
+  - explainability
+  - Flutter
+  - FastAPI
+preferred-citation:
+  type: software
+  title: "DermaSense — CNN-Based Skin Lesion Classification for Early Skin Cancer Detection"
+  authors:
+    - family-names: Liu
+      given-names: Jiahao
+  version: "2.1"
+  date-released: 2026-05-25
+  url: "https://github.com/Cureeeeeeee/CNN-Based-Skin-Lesion-Classification-for-Early-Skin-Cancer-Detection"
