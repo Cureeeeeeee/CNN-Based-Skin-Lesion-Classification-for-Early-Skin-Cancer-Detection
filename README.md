@@ -404,14 +404,21 @@ the backend and uses a fixed sample output for presentation safety.
 - HAM10000 is dominated by Fitzpatrick I–III skin types and dermoscopy
   images. Performance on darker skin tones, phone-camera images, or other
   populations is uncharacterised.
-- Calibration is fit on HAM10000 val and verified on HAM10000 test only. It
-  is not validated against out-of-distribution images.
+- Calibration is fit on HAM10000 val and verified on HAM10000 test. Phase E.6
+  showed it does not transfer to ISIC 2019 — single-model ECE rises 5-9x
+  out-of-distribution (see `docs/phase_e_external_validation.md`). Confidence
+  is untrustworthy off-distribution.
 - Grad-CAM is available only for the single-model (ResNet50) path; per-model
   Grad-CAM for the ensemble breakdown is not yet implemented.
-- No external dataset validation has been performed (e.g. ISIC 2019 has not
-  been tested).
-- No Docker image / deployment bundle yet; the backend runs via local
-  `uvicorn` and the Flutter Web bundle ships separately.
+- External validation performed on a HAM-disjoint subset of ISIC 2019 (4,353
+  images); melanoma recall falls from in-distribution 73.40% to external
+  37.09% — see `docs/phase_e_external_validation.md`. The strong
+  in-distribution number does not generalise; this is the central caveat for
+  clinical use.
+- Docker design documented in `docs/docker_design.md` but not built for v2.0 —
+  the MacBook demo target runs faster on native Python without Rosetta amd64
+  emulation. The backend runs via local `uvicorn` (see `scripts/run_demo.sh` /
+  `.ps1`); the Flutter Web bundle ships separately.
 - Test coverage is limited (1 Dart widget test, 1 Python smoke test); broader
   widget and integration tests are not in place.
 - Flutter Android deployment requires Android SDK configuration on the host
@@ -427,9 +434,9 @@ the backend and uses a fixed sample output for presentation safety.
 This is an educational prototype, not a medical device, and is restricted to
 **non-commercial use**.
 
-- **Code license:** no `LICENSE` file is committed yet; MIT or Apache-2.0 is
-  recommended for the source code (the choice is the author's). A permissive
-  code license governs the code only — it cannot relax the dataset terms below.
+- **Code license:** MIT license committed as `LICENSE` in repo root (Copyright
+  (c) 2026 Jiahao Liu). The MIT license governs the code only; CC BY-NC
+  propagates to the trained weights via HAM10000.
 - **Datasets:** **HAM10000** (training) and **ISIC 2019** (planned external
   validation) are both **CC BY-NC 4.0** (Attribution–NonCommercial). The model
   weights are derivative works of this data, so the NonCommercial restriction

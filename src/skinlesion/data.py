@@ -84,14 +84,16 @@ def compute_class_weights(rows: pd.DataFrame, classes: list[str]) -> torch.Tenso
     weights = total / (len(classes) * counts)
     return torch.tensor(weights.to_numpy(dtype="float32"))
 
-def make_balanced_sampler(rows, classes):
+def make_balanced_sampler(rows, classes, generator=None):
     """WeightedRandomSampler with weights inversely proportional to class counts.
-    
+
     Used for the training split only — gives each batch ~equal class representation.
+    Pass a seeded ``generator`` (torch.Generator) for deterministic sampling;
+    defaults to None (global RNG), preserving prior behaviour.
     """
     counts = rows["label"].value_counts().reindex(classes, fill_value=0)
     class_w = {c: (0.0 if counts[c] == 0 else 1.0 / counts[c]) for c in classes}
     sample_w = rows["label"].map(class_w).to_numpy(dtype="float32")
     return WeightedRandomSampler(
-        weights=sample_w, num_samples=len(sample_w), replacement=True
+        weights=sample_w, num_samples=len(sample_w), replacement=True, generator=generator
     )

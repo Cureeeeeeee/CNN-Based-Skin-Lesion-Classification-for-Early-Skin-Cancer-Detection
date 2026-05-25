@@ -33,10 +33,14 @@ Release upload, URL substitution, and the push.
 - [ ] Paste release notes from `docs/release_v2.0.md`.
 
 ## Wire up the downloader
-- [ ] Edit `scripts/download_checkpoints.py`: set `GITHUB_USER` / `GITHUB_REPO`
-      (or document the `--base-url` form).
-- [ ] Re-test against the uploaded assets on a clean dir:
+- [x] Edit `scripts/download_checkpoints.py`: set `GITHUB_USER` / `GITHUB_REPO`
+      (or document the `--base-url` form). **DONE for v2.0** —
+      `GITHUB_USER = "Cureeeeeeee"`,
+      `GITHUB_REPO = "CNN-Based-Skin-Lesion-Classification-for-Early-Skin-Cancer-Detection"`.
+- [x] Re-test against the uploaded assets on a clean dir:
       `python scripts/download_checkpoints.py` → all 6 download + SHA256-verify.
+      **DONE 2026-05-25** — 12/12 assets downloaded + verified in 35.4 s; see
+      `docs/phase_f/download_integration_test.md`.
 - [ ] Optionally test the full path: `bash scripts/run_demo.sh` on a clean
       machine / fresh `.venv`.
 

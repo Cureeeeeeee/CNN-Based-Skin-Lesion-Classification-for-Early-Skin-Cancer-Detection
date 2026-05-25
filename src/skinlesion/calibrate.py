@@ -54,6 +54,15 @@ def parse_args() -> argparse.Namespace:
         help="Calibrate only this model (default: all models in config).",
     )
     parser.add_argument(
+        "--exp-name",
+        help="Optional experiment name to disambiguate the run directory read "
+        "and written; defaults to model name. Use to calibrate a variant "
+        "checkpoint without colliding on runs/<model_name>/ or clobbering the "
+        "committed docs/figures/calibration_<model>.png, e.g., --model resnet50 "
+        "--exp-name resnet50_v2_focal. Requires --model (cannot disambiguate "
+        "all models with a single name).",
+    )
+    parser.add_argument(
         "--split",
         default="val",
         choices=["val", "test"],
@@ -151,8 +160,15 @@ def calibrate_one(
     output_dir: Path,
     figures_dir: Path,
     n_bins: int,
+    exp_name: str | None = None,
 ) -> dict:
-    """Calibrate a single model and persist artefacts. Returns the summary."""
+    """Calibrate a single model and persist artefacts. Returns the summary.
+
+    `model_name` is the architecture (drives create_model); `exp_name` keys the
+    committed figure filenames + plot labels so a variant doesn't overwrite the
+    canonical calibration_<model>.png. Defaults to model_name.
+    """
+    exp_name = exp_name or model_name
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     model = create_model(model_name, num_classes=len(classes), pretrained=False).to(device)
     model.load_state_dict(checkpoint["state_dict"])
@@ -178,13 +194,13 @@ def calibrate_one(
     # Reliability diagram on the FIT split (val).
     plot_reliability_diagram(
         fit_bins_before, fit_bins_after,
-        model_name=f"{model_name} ({fit_split})",
+        model_name=f"{exp_name} ({fit_split})",
         output_path=output_dir / "reliability.png",
     )
     plot_reliability_diagram(
         fit_bins_before, fit_bins_after,
-        model_name=f"{model_name} ({fit_split})",
-        output_path=figures_dir / f"calibration_{model_name}.png",
+        model_name=f"{exp_name} ({fit_split})",
+        output_path=figures_dir / f"calibration_{exp_name}.png",
     )
 
     payload: dict = {
@@ -208,13 +224,13 @@ def calibrate_one(
         )
         plot_reliability_diagram(
             eb_bins, ea_bins,
-            model_name=f"{model_name} ({eval_split})",
+            model_name=f"{exp_name} ({eval_split})",
             output_path=output_dir / f"reliability_{eval_split}.png",
         )
         plot_reliability_diagram(
             eb_bins, ea_bins,
-            model_name=f"{model_name} ({eval_split})",
-            output_path=figures_dir / f"calibration_{model_name}_{eval_split}.png",
+            model_name=f"{exp_name} ({eval_split})",
+            output_path=figures_dir / f"calibration_{exp_name}_{eval_split}.png",
         )
         payload["eval_evaluation"] = {
             "split": eval_split,
@@ -231,6 +247,13 @@ def calibrate_one(
 
 def main() -> None:
     args = parse_args()
+    # Fail fast on the usage error before doing any data loading.
+    if args.exp_name and not args.model:
+        raise ValueError(
+            "--exp-name requires --model; it names a single run directory and "
+            "cannot disambiguate all models in the config."
+        )
+
     config = load_config(args.config)
     data_config = config["data"]
     classes: list[str] = data_config["classes"]
@@ -250,13 +273,18 @@ def main() -> None:
     )
 
     summaries: list[dict] = []
+    written_dirs: list[Path] = []
     for name in model_names:
-        checkpoint_path = run_root / name / "best.pt"
+        # exp_dir defaults to the architecture name (backward compat); set via
+        # --exp-name to read/write a variant directory without collisions.
+        exp_dir = args.exp_name or name
+        output_dir = run_root / exp_dir
+        checkpoint_path = output_dir / "best.pt"
         if not checkpoint_path.exists():
-            print(f"[skip] {name}: checkpoint not found at {checkpoint_path}")
+            print(f"[skip] {exp_dir}: checkpoint not found at {checkpoint_path}")
             continue
 
-        print(f"[fit ] {name}  (fit={args.split}, eval={eval_split or 'none'})")
+        print(f"[fit ] {exp_dir}  (fit={args.split}, eval={eval_split or 'none'})")
         summary = calibrate_one(
             model_name=name,
             checkpoint_path=checkpoint_path,
@@ -266,11 +294,13 @@ def main() -> None:
             eval_split=eval_split,
             classes=classes,
             device=device,
-            output_dir=run_root / name,
+            output_dir=output_dir,
             figures_dir=figures_root,
             n_bins=args.n_bins,
+            exp_name=exp_dir,
         )
         summaries.append(summary)
+        written_dirs.append(output_dir)
         b, a = summary["before"], summary["after"]
         msg = (
             f"        T={summary['temperature']:.3f}  "
@@ -291,8 +321,8 @@ def main() -> None:
 
     print()
     print("done. wrote calibration.json and reliability diagrams to:")
-    for s in summaries:
-        print(f"  {run_root}/{s['model']}/")
+    for d in written_dirs:
+        print(f"  {d}/")
 
 
 if __name__ == "__main__":

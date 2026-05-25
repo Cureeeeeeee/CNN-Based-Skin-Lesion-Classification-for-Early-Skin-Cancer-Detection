@@ -15,8 +15,9 @@ verifies the download against `runs_v2/release_manifest.json`.
 ║        densenet121__best.pt              densenet121__calibration.json     ║
 ║        efficientnet_b0__best.pt          efficientnet_b0__calibration.json ║
 ║        mobilenetv3_small_100__best.pt    mobilenetv3_small_100__calibration.json
-║  2. Replace GITHUB_USER / GITHUB_REPO below with the real values           ║
-║     (or pass --base-url at runtime).                                       ║
+║  GITHUB_USER / GITHUB_REPO below are already set to this project's real     ║
+║  release, so no editing is needed for default use. Forks should update      ║
+║  those constants (or pass --base-url at runtime) to point at their release. ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 
 What it downloads per model directory:
@@ -41,9 +42,10 @@ import sys
 import urllib.request
 from pathlib import Path
 
-# PLACEHOLDERS — replace after creating the GitHub Release, or pass --base-url.
-GITHUB_USER = "<GITHUB_USER>"
-GITHUB_REPO = "<GITHUB_REPO>"
+# Real values for this project's GitHub Release. Forks should update these
+# (or pass --base-url at runtime).
+GITHUB_USER = "Cureeeeeeee"
+GITHUB_REPO = "CNN-Based-Skin-Lesion-Classification-for-Early-Skin-Cancer-Detection"
 RELEASE_TAG = "v2.0"
 
 MANIFEST_PATH = Path("runs_v2/release_manifest.json")

@@ -174,3 +174,97 @@ Set `production.resnet50_checkpoint` back to `resnet50` in
 the v1 checkpoint (`runs/resnet50/best.pt`, T=1.5391) and `/model-info` reports
 `resnet50_version=v1`. No code change required. `runs/resnet50_v1_backup/` is an
 additional safety copy of the original v1 artefacts.
+
+---
+
+## Reproducibility — `--exp-name` mechanism (REPRO-1, 2026-05-25)
+
+**Bug fixed (Phase C [P1]).** `train.py` computed the output directory as
+`runs/<model_name>/`. During Phase C, three ResNet50 variants
+(`resnet50_v2_focal`, `resnet50_v2_sampler`, `resnet50_v2_focal_plus_sampler`)
+all shared `--model resnet50`, so they **collided on `runs/resnet50/`** and the
+night agent had to rename directories after each run. The YAML config alone did
+not disambiguate experiments because the directory was keyed on architecture,
+not experiment.
+
+**Fix.** A `--exp-name` flag now names the output directory; it defaults to the
+model name, so behaviour is **identical when the flag is omitted**. It is wired
+into all three CLIs:
+
+| Tool | What `--exp-name` controls | Checkpoint read/written |
+|------|----------------------------|-------------------------|
+| `train.py` | `runs/<exp_name>/` (best.pt, history.json) | written |
+| `evaluate.py` | `runs/<exp_name>/` (`<split>_metrics.json`, confusion matrix) | read via explicit `--checkpoint`; metrics written to `<exp_name>` |
+| `calibrate.py` | `runs/<exp_name>/` (calibration.json, reliability.png) **and** the committed `docs/figures/calibration_<exp_name>.png` | read + written |
+
+The architecture name still drives `create_model`; `--exp-name` only changes the
+directory (and, in `calibrate.py`, the committed figure filename so a variant
+does not overwrite the canonical `calibration_<model>.png`). `--exp-name` is
+single-model only — combining it with `--all-models` (train) or omitting
+`--model` (calibrate) raises a clear error, since one name cannot disambiguate
+several models.
+
+**Usage example** (re-running the Phase C winner without collisions):
+```bash
+python -m src.skinlesion.train    --config configs/ham10000.yaml --model resnet50 --exp-name resnet50_v2_focal
+python -m src.skinlesion.evaluate --config configs/ham10000.yaml --model resnet50 --exp-name resnet50_v2_focal --checkpoint runs/resnet50_v2_focal/best.pt --split test
+python -m src.skinlesion.calibrate --config configs/ham10000.yaml --model resnet50 --exp-name resnet50_v2_focal
+```
+
+**Backward-compat verified** (no flag → unchanged paths): `--exp-name` defaults
+to `None` on all three parsers; with it unset, `runs/<model>/` resolution is
+byte-identical to the prior behaviour. Existing v1 flows
+(`--model resnet50` with no `--exp-name`) are unaffected.
+
+**If Phase C2 is ever pursued** (per-backbone v2 variants for an all-v2
+ensemble), each variant should be trained/evaluated/calibrated with an explicit
+`--exp-name` (e.g. `densenet121_v2_focal_plus_sampler`) rather than relying on
+post-run renames — this is the intended path the flag now supports.
+
+## Reproducibility — Random Seed (REPRO-3, 2026-05-25)
+
+**Goal.** Make *future* training runs deterministic. **No existing checkpoint is
+re-trained** — this only affects new runs, and historical v1/v2 numbers stand as
+recorded.
+
+**Config.** A new `reproducibility:` block in `configs/ham10000.yaml`:
+```yaml
+reproducibility:
+  seed: 42
+  cudnn_deterministic: true
+```
+`train.py` resolves the seed as `reproducibility.seed` → top-level `seed` → `42`
+(in that precedence order), so configs lacking the block stay backward
+compatible. The legacy top-level `seed: 42` is intentionally left in place; the
+block mirrors it and is authoritative.
+
+**What the seed covers.** Model weight init, data-shuffle order, the balanced
+`WeightedRandomSampler` (now passed a `torch.Generator().manual_seed(seed)`),
+and dropout — via `random`, `numpy`, `torch`, and `torch.cuda` seeding plus the
+per-DataLoader generator. Determinism of the sampler was verified empirically:
+same seed → identical sample sequence; different seed → different sequence.
+
+**What it does *not* cover.** cuDNN floating-point reduction order can still
+differ across **different GPU models / CUDA versions** even with
+`cudnn_deterministic=true`; OS-level thread scheduling and non-deterministic
+CUDA kernels are not fully controlled. So bit-exact reproducibility is expected
+*on the same machine/GPU*, not across hardware.
+
+**`cudnn_deterministic` trade-off.** Enabling it disables cuDNN autotuning
+(`benchmark=false`) and forces deterministic kernels — a small GPU-speed cost
+for exact reproducibility. It is **off unless the config enables it**, preserving
+prior (non-deterministic, autotuned) behaviour for configs without the block.
+
+**Why this means new runs differ from historical numbers.** v1/v2 checkpoints
+were trained with default cuDNN non-determinism (benchmark on). A fresh run with
+`cudnn_deterministic=true` will therefore produce *slightly* different metrics
+than the recorded historical numbers. This is expected; do not re-train to
+"match" the old numbers.
+
+**How to override.** Edit `reproducibility.seed` in the YAML (or the top-level
+`seed`). There is no `--seed` CLI flag today; if added later, it should override
+the config value. Set `cudnn_deterministic: false` to trade reproducibility back
+for autotuned speed.
+
+**Why 42.** Community convention; the value is arbitrary and has no special
+property.

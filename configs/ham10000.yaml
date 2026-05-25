@@ -46,6 +46,15 @@ ensemble:
     efficientnet_b0: runs/efficientnet_b0/best.pt
     mobilenetv3_small_100: runs/mobilenetv3_small_100/best.pt
 
+reproducibility:
+  # Mirrors the top-level `seed` above (kept for backward compat). This block is
+  # authoritative for new training runs: train.py prefers reproducibility.seed,
+  # falling back to the top-level seed, then 42. cudnn_deterministic trades a
+  # little GPU speed for exact run-to-run reproducibility and is why new runs may
+  # differ slightly from historical v1/v2 numbers. See docs/validation.md.
+  seed: 42
+  cudnn_deterministic: true
+
 production:
   resnet50_checkpoint: resnet50_v2
   notes: |
