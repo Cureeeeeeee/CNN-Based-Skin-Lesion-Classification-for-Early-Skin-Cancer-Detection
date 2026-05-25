@@ -19,15 +19,17 @@ class ModelComparisonScreen extends StatelessWidget {
   ];
 
   // Per-class recall (%). v1 columns RN50/DN121/ENB0/MN3; v2 = deployed
-  // single-model (null = not measured in the v2 retraining → dash).
+  // single-model (all 7 classes now provided; v2 kept nullable for schema
+  // stability + a defensive render-path null guard).
+  // Source: runs_v2/resnet50_v2_focal_plus_sampler/test_metrics.json.
   static const _recall = <_RecallRowData>[
     _RecallRowData('mel', [55, 59, 57, 57], 73.40),
     _RecallRowData('bcc', [87, 85, 69, 87], 82.42),
     _RecallRowData('akiec', [60, 60, 69, 58], 69.23),
-    _RecallRowData('bkl', [66, 75, 63, 47], null),
-    _RecallRowData('df', [80, 68, 72, 72], null),
-    _RecallRowData('nv', [87, 84, 84, 71], null),
-    _RecallRowData('vasc', [96, 96, 93, 100], null),
+    _RecallRowData('bkl', [66, 75, 63, 47], 65.83),
+    _RecallRowData('df', [80, 68, 72, 72], 72.00),
+    _RecallRowData('nv', [87, 84, 84, 71], 79.60),
+    _RecallRowData('vasc', [96, 96, 93, 100], 92.59),
   ];
 
   // Real row-normalized confusion matrix (%), rows = true, cols = predicted.
@@ -126,9 +128,11 @@ class ModelComparisonScreen extends StatelessWidget {
                     _RecallTable(rows: _recall),
                     SizedBox(height: 12),
                     _NoteBlock(
-                      'The RN50 v2 column shows the deployed single-model\'s '
-                      'per-class recall. Some classes were not measured in the '
-                      'v2 retraining (focused on mel recall), hence the dashes.',
+                      'Bold = v2 retraining target (mel, bcc, akiec). v2 used '
+                      'focal loss + balanced sampler; non-target classes '
+                      '(bkl, df, nv, vasc) are shown for completeness. Full v1 '
+                      'vs v2 comparison and macro metrics in '
+                      'runs_v2/SUMMARY.md.',
                     ),
                   ],
                 ),
@@ -365,47 +369,108 @@ class _RecallTable extends StatelessWidget {
 
   final List<_RecallRowData> rows;
 
+  // Deployed-v2 column emphasis tint, applied uniformly to the RN50 v2 header
+  // cell + all 7 data cells so the column reads as one highlighted band.
+  // (The mockup's .v2-col uses --neutral-50; this screen uses the stronger
+  // primary-50 emphasis. Warn cells <70% keep this tint and signal via text
+  // colour only; the dash sits on top of the tint with a muted text colour.)
+  static const Color _v2Tint = DSColors.primary50;
+  // v2 retraining targets (focal loss + balanced sampler) get bold emphasis;
+  // non-targets are shown muted for completeness.
+  static const Set<String> _v2PrimaryTargets = {'mel', 'bcc', 'akiec'};
+  static const List<String> _headers = [
+    'Class', 'RN50 v1', 'DN121', 'ENB0', 'MN3', 'RN50 v2',
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _tableHeader(const ['Class', 'RN50 v1', 'DN121', 'ENB0', 'MN3', 'RN50 v2']),
-        for (var i = 0; i < rows.length; i++)
-          Container(
-            decoration: BoxDecoration(
-              border: i == rows.length - 1
-                  ? null
-                  : const Border(
-                      bottom: BorderSide(color: DSColors.neutral100)),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 9),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: Text(rows[i].code,
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: DSColors.neutral700,
-                      )),
-                ),
-                for (final v in rows[i].v1) _recallCell(v.toDouble()),
-                _v2Cell(rows[i].v2),
-              ],
-            ),
+        _row(
+          last: false,
+          cells: [
+            for (var i = 0; i < _headers.length; i++)
+              _headerCell(_headers[i],
+                  first: i == 0, isV2: i == _headers.length - 1),
+          ],
+        ),
+        for (var r = 0; r < rows.length; r++)
+          _row(
+            last: r == rows.length - 1,
+            cells: [
+              _classCell(rows[r].code),
+              for (final v in rows[r].v1) _recallCell(v.toDouble()),
+              _v2DataCell(rows[r].code, rows[r].v2),
+            ],
           ),
       ],
     );
   }
 
+  // One table row: equal-width columns (Expanded flex 1) so "RN50 v2" fits on
+  // a single line; stretch + inner cell padding keeps the v2 tint continuous
+  // from the header through the last row. Bottom hairline drawn over the band.
+  Widget _row({required List<Widget> cells, required bool last}) {
+    return Container(
+      decoration: last
+          ? null
+          : const BoxDecoration(
+              border: Border(bottom: BorderSide(color: DSColors.neutral100)),
+            ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [for (final cell in cells) Expanded(child: cell)],
+        ),
+      ),
+    );
+  }
+
+  Widget _headerCell(String label, {required bool first, required bool isV2}) {
+    return Container(
+      color: isV2 ? _v2Tint : null,
+      padding: EdgeInsets.fromLTRB(isV2 ? 4 : 0, 0, isV2 ? 4 : 0, 8),
+      alignment: first ? Alignment.bottomLeft : Alignment.bottomRight,
+      child: Text(
+        label,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.visible,
+        textAlign: first ? TextAlign.left : TextAlign.right,
+        style: TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 10.5,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.6,
+          color: isV2 ? DSColors.primary700 : DSColors.neutral500,
+        ),
+      ),
+    );
+  }
+
+  Widget _classCell(String code) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      alignment: Alignment.centerLeft,
+      child: Text(
+        code,
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: DSColors.neutral700,
+        ),
+      ),
+    );
+  }
+
   Widget _recallCell(double v) {
     final warn = v < 70;
-    return Expanded(
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      alignment: Alignment.centerRight,
       child: Text(
         warn ? '⚠ ${v.toStringAsFixed(0)}' : v.toStringAsFixed(0),
-        textAlign: TextAlign.right,
         style: TextStyle(
           fontFamily: 'Inter',
           fontSize: 12.5,
@@ -417,25 +482,57 @@ class _RecallTable extends StatelessWidget {
     );
   }
 
-  Widget _v2Cell(double? v) {
-    final warn = v != null && v < 70;
-    return Expanded(
-      child: Container(
-        color: DSColors.neutral50,
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        margin: const EdgeInsets.only(left: 2),
+  // RN50 v2 data cell: uniform primary-50 tint (same as the header cell).
+  // Style cascade (precedence: warn > primary-target > non-target):
+  //   1. value < 70    -> "⚠ XX.XX", amber, bold (w700)
+  //   2. primary target -> "XX.XX",   dark,  bold (w700)   [mel, bcc, akiec]
+  //   3. non-target     -> "XX.XX",   muted, w500          [df, nv, vasc]
+  // The tint never changes (warn is text-only). A null guard remains for
+  // schema safety even though all 7 rows now carry a value. Every cell is
+  // FittedBox(scaleDown)+single-line so "⚠ 69.23"/"⚠ 65.83" never wrap.
+  Widget _v2DataCell(String code, double? v) {
+    final bool warn = v != null && v < 70;
+    final bool primary = _v2PrimaryTargets.contains(code);
+
+    final String text;
+    final Color color;
+    final FontWeight weight;
+    if (v == null) {
+      text = '—';
+      color = DSColors.neutral300;
+      weight = FontWeight.w500;
+    } else if (warn) {
+      text = '⚠ ${v.toStringAsFixed(2)}';
+      color = DSColors.stateWatch500;
+      weight = FontWeight.w700;
+    } else if (primary) {
+      text = v.toStringAsFixed(2);
+      color = DSColors.neutral900;
+      weight = FontWeight.w700;
+    } else {
+      text = v.toStringAsFixed(2);
+      color = DSColors.neutral500;
+      weight = FontWeight.w500;
+    }
+
+    return Container(
+      color: _v2Tint,
+      padding: const EdgeInsets.fromLTRB(4, 9, 4, 9),
+      alignment: Alignment.centerRight,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerRight,
         child: Text(
-          v == null
-              ? '—'
-              : (warn ? '⚠ ${v.toStringAsFixed(2)}' : v.toStringAsFixed(2)),
+          text,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.visible,
           textAlign: TextAlign.right,
           style: TextStyle(
             fontFamily: 'Inter',
             fontSize: 12.5,
-            fontWeight: FontWeight.w600,
-            color: v == null
-                ? DSColors.neutral300
-                : (warn ? DSColors.stateWatch500 : DSColors.neutral900),
+            fontWeight: weight,
+            color: color,
             fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
