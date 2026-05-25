@@ -47,15 +47,18 @@ flutter run -d chrome
 Start the backend before using the app:
 
 ```bash
-uvicorn src.skinlesion.api:app --host 0.0.0.0 --port 8000
+uvicorn src.skinlesion.api:app --host 0.0.0.0 --port 8126
 ```
+
+Port 8126 matches the deployment scripts (`scripts/run_demo.sh` / `.ps1`)
+and the app's built-in default.
 
 Default API URL:
 
-- Flutter Web: `http://127.0.0.1:8000`
-- Android emulator: `http://10.0.2.2:8000`
+- Flutter Web: `http://127.0.0.1:8126`
+- Android emulator: `http://10.0.2.2:8126`
 - Real phone: replace it with the computer's LAN IP, for example
-  `http://192.168.1.20:8000`
+  `http://192.168.1.20:8126`
 
 The API URL is editable inside the Classification screen's collapsible
 connection card. API mode calls one of:

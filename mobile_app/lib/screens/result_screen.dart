@@ -250,6 +250,28 @@ class _ResultScreenState extends State<ResultScreen> {
                     apiBaseUrl: widget.apiBaseUrl,
                     camAvailable: _ensembleCamAvailable,
                   ),
+                  const SizedBox(height: AppSpacing.sm),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline,
+                            size: 13, color: AppColors.textTertiary),
+                        SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            'Ensemble mode uses v1 baseline models (ResNet50, '
+                            'DenseNet121, EfficientNet-B0, MobileNetV3 Small). '
+                            'Single-model mode uses v2 ResNet50 (focal + sampler) '
+                            'for higher melanoma recall. Predictions may differ '
+                            'between modes; both are valid views of the same image.',
+                            style: AppText.captionMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
                 const SizedBox(height: AppSpacing.md),
                 _MetadataFooter(

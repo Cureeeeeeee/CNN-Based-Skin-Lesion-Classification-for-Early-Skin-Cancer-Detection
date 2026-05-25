@@ -35,6 +35,8 @@ class SafetyAboutScreen extends StatelessWidget {
             const _CalibrationCard(),
             const SizedBox(height: AppSpacing.md),
             const _AttentionCard(),
+            const SizedBox(height: AppSpacing.md),
+            const _LicenseCard(),
             const SizedBox(height: AppSpacing.lg),
             OutlinedButton.icon(
               onPressed: () => Navigator.of(context).push(
@@ -477,6 +479,58 @@ class _AttentionCard extends StatelessWidget {
             'are fetched together once and cached). Each backbone uses its own '
             'deepest spatial layer. Overlays are rendered server-side and '
             'decoded by the client.',
+            style: AppText.captionMuted,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── License & attribution ─────────────────────────────────────────────────────
+
+class _LicenseCard extends StatelessWidget {
+  const _LicenseCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const StandardCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeader(
+            label: 'License & Attribution',
+            icon: Icons.gavel_outlined,
+          ),
+          SizedBox(height: AppSpacing.sm),
+          Text(
+            'Code: MIT License (Copyright © 2026 Jiahao Liu). See LICENSE in '
+            'the repository.',
+            style: AppText.bodyMuted,
+          ),
+          SizedBox(height: AppSpacing.sm),
+          Text(
+            'Trained weights: derivative of HAM10000 (CC BY-NC 4.0) — academic '
+            '/ research use only, no commercial use.',
+            style: AppText.bodyMuted,
+          ),
+          SizedBox(height: AppSpacing.sm),
+          Text(
+            'Required citation (HAM10000):',
+            style: AppText.bodyMuted,
+          ),
+          SizedBox(height: 2),
+          Text(
+            'Tschandl P., Rosendahl C. & Kittler H. The HAM10000 dataset, a '
+            'large collection of multi-source dermatoscopic images of common '
+            'pigmented skin lesions. Scientific Data 5, 180161 (2018). '
+            'doi:10.1038/sdata.2018.161',
+            style: AppText.captionMuted,
+          ),
+          SizedBox(height: AppSpacing.sm),
+          Text(
+            'External validation set (ISIC 2019): Hospital Clínic de Barcelona '
+            '/ International Skin Imaging Collaboration. CC BY-NC 4.0.',
             style: AppText.captionMuted,
           ),
         ],

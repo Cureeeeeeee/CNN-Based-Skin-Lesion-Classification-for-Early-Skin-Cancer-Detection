@@ -180,6 +180,14 @@ class _ModelSummaryCard extends StatelessWidget {
             'Acc = overall accuracy · F1 = macro F1 · Wt = ensemble weight',
             style: AppText.captionMuted,
           ),
+          const SizedBox(height: AppSpacing.sm),
+          const Text(
+            'Single-model /predict uses ResNet50 v2 (focal loss + balanced '
+            'sampler): test mel recall 73.40%, F1 70.08%. The 4-model ensemble '
+            'continues to use v1 ResNet50 for stability (Phase C Stage B '
+            'decision; see docs/phase_c_stage_b_ensemble_review.md).',
+            style: AppText.captionMuted,
+          ),
         ],
       ),
     );
@@ -356,6 +364,13 @@ class _PerClassRecallCard extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 6),
+          const Text(
+            'Per-class recall shown is for v1 baseline models (ensemble path). '
+            'v2 ResNet50 (single-model deployment): mel 73.40%, akiec 69.23%, '
+            'bcc 82.42%.',
+            style: AppText.captionMuted,
+          ),
         ],
       ),
     );
@@ -504,18 +519,24 @@ class _LimitationsCard extends StatelessWidget {
   const _LimitationsCard();
 
   static const _items = <String>[
-    'Melanoma recall is 54–59% across all four models. Roughly 4 in 10 '
-        'melanoma cases in the test set are misclassified. Do not rely on this '
-        'system to rule out melanoma.',
+    'v2 ResNet50 is the production single model (/predict); the 4-model '
+        'ensemble (/predict-ensemble) uses v1 ResNet50. Phase C Stage B showed '
+        'swapping v2 into the ensemble dilutes the melanoma signal.',
+    'Melanoma recall: v2 ResNet50 (deployed single-model) reaches 73.40% '
+        'in-distribution; v1 baselines (ensemble members) range 54-59%. '
+        'Roughly 1 in 4 melanoma cases in the test set still missed by the '
+        'v2 winner.',
     'HAM10000 contains predominantly Fitzpatrick skin types I–III. '
         'Performance on darker skin tones is not characterised.',
     'Phone-camera images differ optically from dermoscopic images and may '
         'produce less reliable predictions.',
     'The dataset is heavily skewed toward melanocytic nevi (nv). Rare '
         'classes receive less training signal and have higher variance.',
-    'No external validation has been performed beyond the HAM10000 test '
-        'split. Generalisation to other populations or imaging conditions '
-        'is unknown.',
+    'External validation performed on a HAM-disjoint subset of ISIC 2019 '
+        '(4,353 images). v2 single mel recall drops from 73.40% (HAM) to '
+        '37.09% (ISIC); v1 ensemble F1 drops 74.10% to 41.24%. The strong '
+        'in-distribution numbers do not generalise. See '
+        'docs/phase_e_external_validation.md for the full audit.',
   ];
 
   @override

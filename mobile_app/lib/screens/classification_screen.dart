@@ -32,7 +32,7 @@ class _ClassificationScreenState extends State<ClassificationScreen> {
   void initState() {
     super.initState();
     _apiUrlController = TextEditingController(
-      text: kIsWeb ? 'http://127.0.0.1:8000' : 'http://10.0.2.2:8000',
+      text: kIsWeb ? 'http://127.0.0.1:8126' : 'http://10.0.2.2:8126',
     );
   }
 
