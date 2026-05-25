@@ -7,19 +7,14 @@ import '../models/ensemble_result.dart';
 import '../models/prediction_result.dart';
 import '../models/selected_image.dart';
 import '../services/prediction_api.dart';
-import '../theme/tokens.dart';
-import '../widgets/cards.dart';
-import '../widgets/disclaimer_ribbon.dart';
-import '../widgets/metadata_strip.dart';
-import '../widgets/risk.dart';
+import '../theme/design_tokens.dart';
 import 'model_comparison_screen.dart';
 import 'safety_about_screen.dart';
 
-/// Unified result screen. Renders an ensemble or single-model result with
-/// shared chrome (metadata strip, hero, image card, disclaimer ribbon)
-/// and conditional sections (disagreement banner, model breakdown — ensemble
-/// only). Single-model mode also exposes a lazy "Attention" toggle that
-/// fetches a Grad-CAM overlay from /predict-cam on first tap (Phase B2).
+/// Redesigned result screen — mockup Screen 3 (data-screen-key="result").
+/// Visual-only rewrite. The `.single` / `.ensemble` constructors, all state
+/// (single-model attention toggle + lazy /predict-cam fetch; ensemble per-model
+/// /predict-cam-ensemble fetch + cache), and navigation are preserved.
 class ResultScreen extends StatefulWidget {
   const ResultScreen.ensemble({
     super.key,
@@ -40,8 +35,6 @@ class ResultScreen extends StatefulWidget {
   final SelectedImage selectedImage;
   final EnsembleResult? ensembleResult;
   final PredictionResult? singleResult;
-  // Backend base URL used for the lazy Grad-CAM fetch. Null in mock mode
-  // and not used in ensemble mode.
   final String? apiBaseUrl;
 
   @override
@@ -57,17 +50,12 @@ class _ResultScreenState extends State<ResultScreen> {
   bool get _isEnsemble => widget.ensembleResult != null;
   bool get _isMock => _isEnsemble ? false : widget.singleResult!.isMock;
 
-  /// Grad-CAM is offered only in single-model API mode. Ensemble mode and
-  /// mock mode do not have a corresponding backend endpoint.
   bool get _camAvailable =>
       !_isEnsemble &&
       !_isMock &&
       widget.apiBaseUrl != null &&
       widget.apiBaseUrl!.isNotEmpty;
 
-  /// Per-model Grad-CAM in the ensemble breakdown is offered only in ensemble
-  /// API mode. A null/empty base URL (e.g. the offline mock ensemble) disables
-  /// it. Additive to the single-model attention toggle, which is unchanged.
   bool get _ensembleCamAvailable =>
       _isEnsemble &&
       widget.apiBaseUrl != null &&
@@ -89,25 +77,12 @@ class _ResultScreenState extends State<ResultScreen> {
       ? widget.ensembleResult!.topCandidates
       : widget.singleResult!.topCandidates;
 
-  String get _disclaimer => _isEnsemble
-      ? widget.ensembleResult!.disclaimer
-      : widget.singleResult!.disclaimer;
-
-  bool get _modelsAgree =>
-      _isEnsemble ? widget.ensembleResult!.modelsAgree : true;
-
   bool get _calibrated => _isEnsemble
       ? widget.ensembleResult!.calibrated
       : widget.singleResult!.calibrated;
 
-  /// Effective risk: disagreement (or indeterminate class) outranks the
-  /// raw class-based risk. A disagreeing ensemble is uncertain by definition,
-  /// regardless of what its top class would otherwise indicate.
-  Risk get _effectiveRisk {
-    final classRisk = riskOf(_topClass);
-    if (_isEnsemble && !_modelsAgree) return Risk.indeterminate;
-    return classRisk;
-  }
+  double get _temperature =>
+      _isEnsemble ? 1.0 : widget.singleResult!.temperature;
 
   void _openAbout() {
     Navigator.of(context).push(
@@ -126,7 +101,6 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   Future<void> _toggleAttention() async {
-    // Already cached? Just flip.
     if (_heatmapBytes != null) {
       setState(() => _attentionOn = !_attentionOn);
       return;
@@ -147,8 +121,7 @@ class _ResultScreenState extends State<ResultScreen> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _heatmapError =
-            error.toString().replaceFirst('Exception: ', '');
+        _heatmapError = error.toString().replaceFirst('Exception: ', '');
         _heatmapLoading = false;
         _attentionOn = false;
       });
@@ -157,70 +130,48 @@ class _ResultScreenState extends State<ResultScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final risk = _effectiveRisk;
-    final eyebrow =
-        _isEnsemble ? 'ENSEMBLE PREDICTION' : 'RESNET50 PREDICTION';
-    final modeLabel = _isEnsemble
-        ? '4-model ensemble · ${widget.ensembleResult!.modelOutputs.length} models'
-        : 'Single model · ResNet50';
-    final version = _isEnsemble
-        ? widget.ensembleResult!.modelVersion
-        : widget.singleResult!.model;
-    final trailing = _isEnsemble
-        ? '${widget.ensembleResult!.inferenceTimeMs.toStringAsFixed(0)} ms'
-        : null;
-
+    final palette = _paletteOf(_stateOf(_topClass));
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Analysis Result'),
-        actions: [
-          IconButton(
-            tooltip: 'About this system',
-            icon: const Icon(Icons.info_outline),
-            onPressed: _openAbout,
+      backgroundColor: DSColors.neutral0,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+            DSSpacing.pageHPadding,
+            DSSpacing.pageHPadding,
+            DSSpacing.pageHPadding,
+            DSSpacing.s5,
           ),
-        ],
-      ),
-      body: Column(
-        children: [
-          MetadataStrip(
-            leadingIcon: _isEnsemble
-                ? Icons.account_tree_outlined
-                : Icons.memory_outlined,
-            label: modeLabel,
-            version: version,
-            trailing: trailing,
-            calibrated: _calibrated,
-          ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.xxl,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ScreenTop(
+                title: 'Analysis Result',
+                onBack: () => Navigator.of(context).pop(),
+                trailing: _IconBtn(icon: Icons.info_outline, onTap: _openAbout),
               ),
-              children: [
-                _RiskHero(
-                  eyebrow: eyebrow,
-                  risk: risk,
-                  classCode: _topClass,
-                  classDisplay: _topDisplay,
-                  confidence: _topConfidence,
-                  isEnsemble: _isEnsemble,
-                  modelsAgree: _modelsAgree,
-                  modelCount: _isEnsemble
-                      ? widget.ensembleResult!.modelOutputs.length
-                      : 1,
-                  agreeCount: _isEnsemble
-                      ? widget.ensembleResult!.modelOutputs
-                          .where((m) => m.predictedClass == _topClass)
-                          .length
-                      : 1,
-                  calibrated: _calibrated,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                _ImageCard(
+              const SizedBox(height: DSSpacing.s4),
+              _MetaStrip(
+                segments: _isEnsemble
+                    ? ['Ensemble', '${widget.ensembleResult!.modelOutputs.length} models']
+                    : ['Single model', widget.singleResult!.model],
+                badge: _calibrated
+                    ? (_isEnsemble
+                        ? 'All calibrated'
+                        : 'Calibrated · T = ${_temperature.toStringAsFixed(3)}')
+                    : null,
+              ),
+              const SizedBox(height: DSSpacing.s4),
+              _Hero(
+                palette: palette,
+                confidence: _topConfidence,
+                isEnsemble: _isEnsemble,
+                classDisplay: _topDisplay,
+                classCode: _topClass,
+                agreement: _isEnsemble ? _agreementText() : null,
+              ),
+              const SizedBox(height: DSSpacing.cardGap),
+              if (!_isEnsemble) ...[
+                _LesionImageCard(
                   image: widget.selectedImage,
                   camAvailable: _camAvailable,
                   attentionOn: _attentionOn,
@@ -229,299 +180,378 @@ class _ResultScreenState extends State<ResultScreen> {
                   error: _heatmapError,
                   onToggle: _toggleAttention,
                 ),
-                if (_isEnsemble && !_modelsAgree) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  _DisagreementBanner(
-                      note: widget.ensembleResult!.agreementNote),
-                ],
-                const SizedBox(height: AppSpacing.md),
-                _DifferentialCard(
-                  candidates: _topCandidates,
-                  topClass: _topClass,
-                  overrideRisk:
-                      _isEnsemble && !_modelsAgree ? Risk.indeterminate : null,
+                const SizedBox(height: DSSpacing.cardGap),
+              ],
+              _Top3Card(candidates: _topCandidates),
+              const SizedBox(height: DSSpacing.cardGap),
+              if (!_isEnsemble)
+                _CalibrationCard(temperature: _temperature)
+              else ...[
+                _PerModelGrid(
+                  outputs: widget.ensembleResult!.modelOutputs,
+                  selectedImage: widget.selectedImage,
+                  apiBaseUrl: widget.apiBaseUrl,
+                  camAvailable: _ensembleCamAvailable,
                 ),
-                if (_isEnsemble) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  _ModelBreakdownCard(
-                    outputs: widget.ensembleResult!.modelOutputs,
-                    ensembleTopClass: _topClass,
-                    selectedImage: widget.selectedImage,
-                    apiBaseUrl: widget.apiBaseUrl,
-                    camAvailable: _ensembleCamAvailable,
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.info_outline,
-                            size: 13, color: AppColors.textTertiary),
-                        SizedBox(width: 5),
-                        Expanded(
-                          child: Text(
-                            'Ensemble mode uses v1 baseline models (ResNet50, '
-                            'DenseNet121, EfficientNet-B0, MobileNetV3 Small). '
-                            'Single-model mode uses v2 ResNet50 (focal + sampler) '
-                            'for higher melanoma recall. Predictions may differ '
-                            'between modes; both are valid views of the same image.',
-                            style: AppText.captionMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(height: AppSpacing.md),
-                _MetadataFooter(
-                  inferenceMs: _isEnsemble
-                      ? widget.ensembleResult!.inferenceTimeMs
-                      : null,
-                  version: version,
-                  requestId:
-                      _isEnsemble ? widget.ensembleResult!.requestId : null,
-                  isMock: _isMock,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                _DisclaimerCard(text: _disclaimer),
-                const SizedBox(height: AppSpacing.md),
-                if (!_isEnsemble) ...[
-                  OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.account_tree_outlined, size: 18),
-                    label: const Text('Switch to Ensemble Mode'),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                ],
-                FilledButton.icon(
-                  onPressed: _runNew,
-                  icon: const Icon(Icons.add_a_photo_outlined, size: 18),
-                  label: const Text('New Analysis'),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                OutlinedButton.icon(
-                  onPressed: _openModels,
-                  icon: const Icon(Icons.assessment_outlined, size: 18),
-                  label: const Text('Model Performance'),
+                const SizedBox(height: DSSpacing.s3),
+                const _Footnote(
+                  'Ensemble uses v1 baseline models. Single-model uses v2 '
+                  'ResNet50 (focal-trained). Predictions may differ between '
+                  'modes; both are valid views.',
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: const DisclaimerRibbon(),
-    );
-  }
-}
-
-// ── Risk hero ─────────────────────────────────────────────────────────────────
-
-class _RiskHero extends StatelessWidget {
-  const _RiskHero({
-    required this.eyebrow,
-    required this.risk,
-    required this.classCode,
-    required this.classDisplay,
-    required this.confidence,
-    required this.isEnsemble,
-    required this.modelsAgree,
-    required this.modelCount,
-    required this.agreeCount,
-    required this.calibrated,
-  });
-
-  final String eyebrow;
-  final Risk risk;
-  final String classCode;
-  final String classDisplay;
-  final double confidence;
-  final bool isEnsemble;
-  final bool modelsAgree;
-  final int modelCount;
-  final int agreeCount;
-  final bool calibrated;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = riskPalette(risk);
-    final clamped = confidence.clamp(0.0, 1.0).toDouble();
-
-    return StatusCard(
-      background: p.bg,
-      accent: p.accent,
-      border: p.border,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  eyebrow,
-                  style: AppText.eyebrow.copyWith(color: p.accent),
+              const SizedBox(height: DSSpacing.s5),
+              // Actions — kept for navigation parity (the legacy screen exposed
+              // these; the mockup omits them but back-only would strand users).
+              if (!_isEnsemble)
+                Row(
+                  children: [
+                    Expanded(
+                      child: _DSButton(
+                        label: 'Switch to Ensemble',
+                        primary: false,
+                        onTap: () => Navigator.of(context).pop(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _DSButton(
+                        label: 'New Analysis',
+                        primary: false,
+                        onTap: _runNew,
+                      ),
+                    ),
+                  ],
+                )
+              else
+                _DSButton(
+                  label: 'New Analysis',
+                  primary: false,
+                  onTap: _runNew,
                 ),
+              const SizedBox(height: 8),
+              _DSButton(
+                label: 'View Model Performance',
+                primary: false,
+                onTap: _openModels,
               ),
-              if (isEnsemble) _AgreementBadge(palette: p, agreeCount: agreeCount, total: modelCount, allAgree: modelsAgree)
-              else _SingleModelBadge(palette: p),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            classCode.toUpperCase(),
-            style: AppText.mono.copyWith(
-              color: p.accent,
-              fontWeight: FontWeight.w700,
-              fontSize: 11.5,
-              letterSpacing: 1.4,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            classDisplay,
-            style: AppText.display.copyWith(color: p.text),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          RiskPill(risk: risk),
-          const SizedBox(height: AppSpacing.lg),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                '${(clamped * 100).toStringAsFixed(1)}%',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  color: p.text,
-                  height: 1,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Flexible(
-                child: Text(
-                  confidenceLabel(clamped),
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: p.accent,
-                  ),
-                ),
+              const SizedBox(height: DSSpacing.s4),
+              const _DisclaimerRibbon(
+                text: 'Illustrative output. Not a diagnosis. Always consult '
+                    'a qualified clinician.',
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            child: LinearProgressIndicator(
-              minHeight: 8,
-              value: clamped,
-              backgroundColor: p.badgeBg,
-              valueColor: AlwaysStoppedAnimation<Color>(p.accent),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            calibrated
-                ? 'Temperature-calibrated model-estimated confidence on '
-                    'the validation set. Not a probability of disease.'
-                : 'Confidence reflects model certainty, not the probability '
-                    'of a correct diagnosis.',
-            style: AppText.caption.copyWith(
-              color: p.text.withValues(alpha: 0.75),
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AgreementBadge extends StatelessWidget {
-  const _AgreementBadge({
-    required this.palette,
-    required this.agreeCount,
-    required this.total,
-    required this.allAgree,
-  });
-
-  final RiskPalette palette;
-  final int agreeCount;
-  final int total;
-  final bool allAgree;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(
-        color: palette.badgeBg,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: palette.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            allAgree
-                ? Icons.verified_outlined
-                : Icons.alt_route_outlined,
-            size: 13,
-            color: palette.accent,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '$agreeCount / $total agree',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: palette.text,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SingleModelBadge extends StatelessWidget {
-  const _SingleModelBadge({required this.palette});
-
-  final RiskPalette palette;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(
-        color: palette.badgeBg,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: palette.border),
-      ),
-      child: Text(
-        'Single model',
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-          color: palette.text,
         ),
       ),
     );
   }
+
+  String _agreementText() {
+    final outputs = widget.ensembleResult!.modelOutputs;
+    final agree =
+        outputs.where((m) => m.predictedClass == _topClass).length;
+    final total = outputs.length;
+    final allCal = widget.ensembleResult!.calibrated;
+    if (agree == total) {
+      return 'All $total models agree${allCal ? ' · all calibrated' : ''}';
+    }
+    return '$agree of $total models agree${allCal ? ' · all calibrated' : ''}';
+  }
 }
 
-// ── Image card ────────────────────────────────────────────────────────────────
+// ── Diagnostic state mapping (no traffic-light; tinted-bg + wording) ──────────
 
-class _ImageCard extends StatelessWidget {
-  const _ImageCard({
+enum _DState { benign, watch, urgent }
+
+_DState _stateOf(String code) {
+  switch (code) {
+    case 'mel':
+    case 'akiec':
+    case 'bcc':
+      return _DState.urgent;
+    case 'bkl':
+    case 'df':
+      return _DState.watch;
+    default: // nv, vasc
+      return _DState.benign;
+  }
+}
+
+class _StatePalette {
+  const _StatePalette({
+    required this.bg,
+    required this.border,
+    required this.accent,
+    required this.deep,
+    required this.pillLabel,
+  });
+  final Color bg;
+  final Color border;
+  final Color accent;
+  final Color deep;
+  final String pillLabel;
+}
+
+_StatePalette _paletteOf(_DState s) {
+  switch (s) {
+    case _DState.urgent:
+      return const _StatePalette(
+        bg: DSColors.stateUrgent50,
+        border: Color(0xFFF3D2D2),
+        accent: DSColors.stateUrgent500,
+        deep: DSColors.stateUrgent900,
+        pillLabel: 'REQUIRES CLINICAL EVALUATION',
+      );
+    case _DState.watch:
+      return const _StatePalette(
+        bg: DSColors.stateWatch50,
+        border: Color(0xFFEADBAE),
+        accent: DSColors.stateWatch500,
+        deep: Color(0xFF5A4708),
+        pillLabel: 'WORTH MONITORING',
+      );
+    case _DState.benign:
+      return const _StatePalette(
+        bg: DSColors.stateBenign50,
+        border: Color(0xFFC3DDD5),
+        accent: DSColors.primary700,
+        deep: DSColors.primary900,
+        pillLabel: 'LOWER CONCERN',
+      );
+  }
+}
+
+// ── Meta strip ────────────────────────────────────────────────────────────────
+
+class _MetaStrip extends StatelessWidget {
+  const _MetaStrip({required this.segments, this.badge});
+
+  final List<String> segments;
+  final String? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final children = <Widget>[];
+    for (var i = 0; i < segments.length; i++) {
+      if (i > 0) {
+        children.add(const Text('·',
+            style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: DSColors.neutral300)));
+      }
+      children.add(Text(segments[i], style: DSText.caption));
+    }
+    if (badge != null) {
+      children.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: DSColors.info50,
+          borderRadius: BorderRadius.circular(DSRadius.pill),
+        ),
+        child: Text(
+          badge!,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: DSColors.info500,
+            fontFeatures: [FontFeature.tabularFigures()],
+          ),
+        ),
+      ));
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: children),
+    );
+  }
+}
+
+// ── Hero ──────────────────────────────────────────────────────────────────────
+
+class _Hero extends StatelessWidget {
+  const _Hero({
+    required this.palette,
+    required this.confidence,
+    required this.isEnsemble,
+    required this.classDisplay,
+    required this.classCode,
+    this.agreement,
+  });
+
+  final _StatePalette palette;
+  final double confidence;
+  final bool isEnsemble;
+  final String classDisplay;
+  final String classCode;
+  final String? agreement;
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = '${(confidence.clamp(0.0, 1.0) * 100).toStringAsFixed(1)}%';
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(isEnsemble ? 20 : 22),
+      decoration: BoxDecoration(
+        color: palette.bg,
+        border: Border.all(color: palette.border, width: DSBorders.width),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // pill
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: DSColors.neutral0,
+              borderRadius: BorderRadius.circular(DSRadius.pill),
+              border: Border.all(color: palette.border, width: DSBorders.width),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: palette.accent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  palette.pillLabel,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.4,
+                    color: palette.accent,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: isEnsemble ? 14 : 16),
+          Text(
+            pct,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: isEnsemble ? 48 : 56,
+              fontWeight: FontWeight.w700,
+              letterSpacing: isEnsemble ? -0.8 : -1,
+              height: 1,
+              color: palette.accent,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+          SizedBox(height: isEnsemble ? 6 : 8),
+          if (isEnsemble) ...[
+            Text(
+              '$classDisplay · ensemble prediction',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12.5,
+                color: palette.deep.withValues(alpha: 0.75),
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (agreement != null) _AgreementChip(palette: palette, text: agreement!),
+          ] else ...[
+            Text(
+              'Calibrated confidence. Not a probability of disease.',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12.5,
+                color: palette.deep.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              classDisplay,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+                color: palette.deep,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              classCode.toUpperCase(),
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.8,
+                color: palette.accent.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AgreementChip extends StatelessWidget {
+  const _AgreementChip({required this.palette, required this.text});
+
+  final _StatePalette palette;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: DSColors.neutral0,
+        borderRadius: BorderRadius.circular(DSRadius.pill),
+        border: Border.all(color: palette.border, width: DSBorders.width),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 14,
+            height: 14,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              color: DSColors.primary500,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.check, size: 9, color: DSColors.neutral0),
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: DSColors.primary700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Lesion image card with cross-fade attention ───────────────────────────────
+
+class _LesionImageCard extends StatelessWidget {
+  const _LesionImageCard({
     required this.image,
-    this.camAvailable = false,
-    this.attentionOn = false,
-    this.heatmapBytes,
-    this.loading = false,
-    this.error,
-    this.onToggle,
+    required this.camAvailable,
+    required this.attentionOn,
+    required this.heatmapBytes,
+    required this.loading,
+    required this.error,
+    required this.onToggle,
   });
 
   final SelectedImage image;
@@ -530,192 +560,142 @@ class _ImageCard extends StatelessWidget {
   final Uint8List? heatmapBytes;
   final bool loading;
   final String? error;
-  final VoidCallback? onToggle;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
-    final showOverlay = attentionOn && heatmapBytes != null;
-
-    return StandardCard(
-      padding: EdgeInsets.zero,
+    final hasCam = heatmapBytes != null;
+    final showCam = attentionOn && hasCam;
+    return _DSCard(
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Lesion image',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: DSColors.neutral900,
+                  )),
+              if (camAvailable) _AttnToggle(on: attentionOn, loading: loading, onTap: onToggle),
+            ],
+          ),
+          const SizedBox(height: 12),
           ClipRRect(
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(AppRadius.lg),
-            ),
+            borderRadius: BorderRadius.circular(14),
             child: AspectRatio(
-              aspectRatio: 1.0,
+              aspectRatio: 4 / 3,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.memory(image.bytes, fit: BoxFit.cover),
-                  if (showOverlay)
-                    Image.memory(
-                      heatmapBytes!,
-                      fit: BoxFit.cover,
-                      gaplessPlayback: true,
+                  AnimatedOpacity(
+                    opacity: showCam ? 0.55 : 1.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Image.memory(image.bytes, fit: BoxFit.cover),
+                  ),
+                  if (hasCam)
+                    AnimatedOpacity(
+                      opacity: showCam ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Image.memory(heatmapBytes!,
+                          fit: BoxFit.cover, gaplessPlayback: true),
                     ),
                   if (loading)
                     const ColoredBox(
-                      color: Color(0x66000000),
+                      color: Color(0x55000000),
                       child: Center(
                         child: SizedBox(
-                          width: 28,
-                          height: 28,
+                          width: 26,
+                          height: 26,
                           child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Colors.white,
-                          ),
+                              strokeWidth: 2.4, color: Colors.white),
                         ),
                       ),
                     ),
-                  if (camAvailable)
-                    Positioned(
-                      top: AppSpacing.sm,
-                      right: AppSpacing.sm,
-                      child: _AttentionToggle(
-                        on: attentionOn,
-                        loading: loading,
-                        onTap: onToggle,
-                      ),
-                    ),
+                  if (showCam)
+                    const Positioned(left: 8, bottom: 8, child: _HeatScale()),
                 ],
               ),
             ),
           ),
-          if (showOverlay)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                AppSpacing.sm,
-                AppSpacing.md,
-                AppSpacing.sm,
-              ),
-              decoration: const BoxDecoration(
-                color: AppColors.surfaceMuted,
-                border: Border(
-                  top: BorderSide(color: AppColors.border),
-                ),
-              ),
-              child: const Text(
-                'Model attention (Grad-CAM). Highlights show where the '
-                'model concentrated its attention — not a clinical region '
-                'of interest.',
-                style: AppText.captionMuted,
-              ),
-            ),
-          if (error != null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                AppSpacing.sm,
-                AppSpacing.md,
-                AppSpacing.sm,
-              ),
-              decoration: const BoxDecoration(
-                color: AppColors.indetBg,
-                border: Border(
-                  top: BorderSide(color: AppColors.indetBorder),
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(
-                    Icons.error_outline,
-                    size: 13,
-                    color: AppColors.indetAccent,
-                  ),
-                  const SizedBox(width: 5),
-                  Expanded(
-                    child: Text(
-                      'Could not load attention overlay: $error',
-                      style: AppText.caption.copyWith(
-                        color: AppColors.indetText,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.sm,
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.insert_drive_file_outlined,
-                  size: 13,
-                  color: AppColors.textTertiary,
-                ),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(
-                    image.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppText.mono.copyWith(
-                      color: AppColors.textTertiary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          const SizedBox(height: 12),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Grad-CAM · final conv layer', style: DSText.caption),
+              Text('Resolution 224 × 224', style: DSText.caption),
+            ],
           ),
+          if (error != null) ...[
+            const SizedBox(height: 8),
+            Text('Could not load attention overlay: $error',
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  color: DSColors.stateWatch500,
+                )),
+          ],
         ],
       ),
     );
   }
 }
 
-class _AttentionToggle extends StatelessWidget {
-  const _AttentionToggle({
-    required this.on,
-    required this.loading,
-    required this.onTap,
-  });
+class _AttnToggle extends StatelessWidget {
+  const _AttnToggle({required this.on, required this.loading, required this.onTap});
 
   final bool on;
   final bool loading;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final bg = on ? AppColors.brandPrimary : Colors.white.withValues(alpha: 0.92);
-    final fg = on ? Colors.white : AppColors.brandPrimaryDark;
     return Material(
-      color: Colors.transparent,
+      color: on ? DSColors.primary50 : DSColors.neutral0,
+      borderRadius: BorderRadius.circular(DSRadius.pill),
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.pill),
         onTap: loading ? null : onTap,
+        borderRadius: BorderRadius.circular(DSRadius.pill),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            border: Border.all(color: AppColors.borderStrong),
+            borderRadius: BorderRadius.circular(DSRadius.pill),
+            border: Border.all(
+              color: on ? DSColors.primary100 : DSColors.neutral300,
+              width: DSBorders.width,
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                on ? Icons.visibility : Icons.visibility_outlined,
-                size: 14,
-                color: fg,
-              ),
-              const SizedBox(width: 5),
+              if (loading)
+                const SizedBox(
+                  width: 10,
+                  height: 10,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: DSColors.primary500),
+                )
+              else
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: on ? DSColors.primary500 : DSColors.neutral300,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              const SizedBox(width: 6),
               Text(
-                'Attention',
+                on ? 'Hide attention' : 'Show attention',
                 style: TextStyle(
-                  color: fg,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: on ? DSColors.primary700 : DSColors.neutral700,
                 ),
               ),
             ],
@@ -726,68 +706,132 @@ class _AttentionToggle extends StatelessWidget {
   }
 }
 
-// ── Disagreement banner ───────────────────────────────────────────────────────
-
-class _DisagreementBanner extends StatelessWidget {
-  const _DisagreementBanner({this.note});
-
-  final String? note;
+class _HeatScale extends StatelessWidget {
+  const _HeatScale();
 
   @override
   Widget build(BuildContext context) {
-    return StatusCard(
-      background: AppColors.indetBg,
-      accent: AppColors.indetAccent,
-      border: AppColors.indetBorder,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0x8C141412),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('LOW',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 8.5,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+                color: DSColors.neutral0,
+              )),
+          const SizedBox(width: 5),
+          Container(
+            width: 36,
+            height: 6,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(3),
+              gradient: const LinearGradient(colors: [
+                Color(0x993C8C64),
+                Color(0xB3BED228),
+                Color(0xD9F5AF1E),
+                Color(0xFFDC281E),
+              ]),
+            ),
+          ),
+          const SizedBox(width: 5),
+          const Text('HIGH',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 8.5,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+                color: DSColors.neutral0,
+              )),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Top-3 differential ────────────────────────────────────────────────────────
+
+class _Top3Card extends StatelessWidget {
+  const _Top3Card({required this.candidates});
+
+  final List<PredictionCandidate> candidates;
+
+  static const _rankColors = [
+    DSColors.classAkiec,
+    DSColors.classBcc,
+    DSColors.classBkl,
+  ];
+  static const _allClasses = ['akiec', 'bcc', 'bkl', 'df', 'mel', 'nv', 'vasc'];
+
+  @override
+  Widget build(BuildContext context) {
+    final top = candidates.take(3).toList();
+    final shownSum =
+        top.fold<double>(0, (a, c) => a + c.confidence.clamp(0.0, 1.0));
+    final other = (1.0 - shownSum).clamp(0.0, 1.0);
+    final shownCodes = top.map((c) => c.className).toSet();
+    final otherCodes =
+        _allClasses.where((c) => !shownCodes.contains(c)).toList();
+
+    return _DSCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(
-                Icons.alt_route_outlined,
-                size: 18,
-                color: AppColors.indetAccent,
-              ),
-              SizedBox(width: AppSpacing.sm),
-              Text(
-                'Models Disagree',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14.5,
-                  color: AppColors.indetText,
-                ),
-              ),
+              _LabelUp('TOP-3 DIFFERENTIAL'),
+              Text('Calibrated', style: DSText.caption),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            note ??
-                "The models did not converge on a single top prediction. "
-                    "The ensemble's weighted result above is shown for "
-                    "reference.",
-            style: const TextStyle(
-              color: AppColors.indetText,
-              fontSize: 13,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.indetBadgeBg,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-            ),
-            child: const Text(
-              'Clinical review recommended',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                color: AppColors.indetText,
-                letterSpacing: 0.3,
+          const SizedBox(height: 14),
+          // stacked bar
+          SizedBox(
+            height: 12,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(DSRadius.pill),
+              child: Row(
+                children: [
+                  for (var i = 0; i < top.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 3),
+                    Expanded(
+                      flex: (top[i].confidence.clamp(0.0, 1.0) * 1000).round() + 1,
+                      child: ColoredBox(color: _rankColors[i]),
+                    ),
+                  ],
+                  if (other > 0) ...[
+                    const SizedBox(width: 3),
+                    Expanded(
+                      flex: (other * 1000).round() + 1,
+                      child: const ColoredBox(color: DSColors.classOther),
+                    ),
+                  ],
+                ],
               ),
             ),
+          ),
+          const SizedBox(height: 14),
+          for (var i = 0; i < top.length; i++)
+            _Top3Row(
+              color: _rankColors[i],
+              code: top[i].className.toUpperCase(),
+              name: top[i].displayLabel,
+              pct: top[i].confidence,
+            ),
+          _Top3Row(
+            color: DSColors.classOther,
+            code: 'Other ${otherCodes.length} classes',
+            name: otherCodes.join(' · '),
+            pct: other,
+            muted: true,
           ),
         ],
       ),
@@ -795,141 +839,157 @@ class _DisagreementBanner extends StatelessWidget {
   }
 }
 
-// ── Differential card ─────────────────────────────────────────────────────────
-
-class _DifferentialCard extends StatelessWidget {
-  const _DifferentialCard({
-    required this.candidates,
-    required this.topClass,
-    this.overrideRisk,
+class _Top3Row extends StatelessWidget {
+  const _Top3Row({
+    required this.color,
+    required this.code,
+    required this.name,
+    required this.pct,
+    this.muted = false,
   });
 
-  final List<PredictionCandidate> candidates;
-  final String topClass;
-  final Risk? overrideRisk;
+  final Color color;
+  final String code;
+  final String name;
+  final double pct;
+  final bool muted;
 
   @override
   Widget build(BuildContext context) {
-    return StandardCard(
-      child: Column(
+    final txt = muted ? DSColors.neutral500 : DSColors.neutral900;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionHeader(
-            label: 'Differential — Top 3',
-            icon: Icons.list_alt_outlined,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          for (var i = 0; i < candidates.length; i++) ...[
-            _DifferentialRow(
-              candidate: candidates[i],
-              isTop: i == 0,
-              risk: overrideRisk ?? riskOf(candidates[i].className),
+          Container(
+            width: 10,
+            height: 10,
+            margin: const EdgeInsets.only(top: 3),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(3),
             ),
-            if (i < candidates.length - 1)
-              const SizedBox(height: AppSpacing.md),
-          ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(code,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: txt,
+                    )),
+                if (name.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: Text(name,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 11.5,
+                          color: DSColors.neutral500,
+                        )),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text('${(pct * 100).toStringAsFixed(1)}%',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: txt,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              )),
         ],
       ),
     );
   }
 }
 
-class _DifferentialRow extends StatelessWidget {
-  const _DifferentialRow({
-    required this.candidate,
-    required this.isTop,
-    required this.risk,
-  });
+// ── Calibration card ──────────────────────────────────────────────────────────
 
-  final PredictionCandidate candidate;
-  final bool isTop;
-  final Risk risk;
+class _CalibrationCard extends StatelessWidget {
+  const _CalibrationCard({required this.temperature});
+
+  final double temperature;
 
   @override
   Widget build(BuildContext context) {
-    final p = riskPalette(risk);
-    final value = candidate.confidence.clamp(0.0, 1.0).toDouble();
-    final barColor = isTop ? p.accent : AppColors.borderStrong;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              candidate.className.toUpperCase(),
-              style: AppText.mono.copyWith(
-                color: AppColors.textTertiary,
-                fontSize: 10.5,
-                letterSpacing: 1.0,
-                fontWeight: FontWeight.w700,
-              ),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(DSSpacing.cardPad),
+      decoration: BoxDecoration(
+        color: DSColors.info50,
+        border: Border.all(color: const Color(0xFFD5DFEF), width: DSBorders.width),
+        borderRadius: BorderRadius.circular(DSRadius.card),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('CALIBRATION',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.8,
+                color: DSColors.info500,
+              )),
+          SizedBox(height: 6),
+          Text(
+            'Temperature scaling fitted on validation; verified on test. '
+            'ECE 0.0248 (in-distribution). Confidence does not transfer '
+            'out-of-distribution (Phase E).',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 13.5,
+              height: 1.55,
+              color: Color(0xFF1F3D6A),
             ),
-            const Spacer(),
-            Text(
-              '${(value * 100).toStringAsFixed(1)}%',
-              style: AppText.mono.copyWith(
-                color: isTop ? p.text : AppColors.textSecondary,
-                fontWeight: FontWeight.w700,
-                fontSize: 12.5,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 2),
-        Text(
-          candidate.displayLabel,
-          style: TextStyle(
-            fontSize: 13.5,
-            fontWeight: isTop ? FontWeight.w800 : FontWeight.w600,
-            color: isTop ? AppColors.textPrimary : AppColors.textSecondary,
-            height: 1.3,
           ),
-        ),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          child: LinearProgressIndicator(
-            minHeight: isTop ? 7 : 5,
-            value: value,
-            backgroundColor: AppColors.border,
-            valueColor: AlwaysStoppedAnimation<Color>(barColor),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-// ── Model breakdown ───────────────────────────────────────────────────────────
+// ── Per-model attention grid (ensemble) ───────────────────────────────────────
 
-class _ModelBreakdownCard extends StatefulWidget {
-  const _ModelBreakdownCard({
+class _PerModelGrid extends StatefulWidget {
+  const _PerModelGrid({
     required this.outputs,
-    required this.ensembleTopClass,
     required this.selectedImage,
     required this.apiBaseUrl,
     required this.camAvailable,
   });
 
   final List<ModelPrediction> outputs;
-  final String ensembleTopClass;
   final SelectedImage selectedImage;
   final String? apiBaseUrl;
   final bool camAvailable;
 
   @override
-  State<_ModelBreakdownCard> createState() => _ModelBreakdownCardState();
+  State<_PerModelGrid> createState() => _PerModelGridState();
 }
 
-class _ModelBreakdownCardState extends State<_ModelBreakdownCard> {
-  // A single /predict-cam-ensemble call serves every row; cached here so that
-  // expanding more rows after the first does not re-fetch. Lazily triggered by
-  // the first row expansion (Phase D.3).
+class _PerModelGridState extends State<_PerModelGrid> {
+  // Re-skin of the Phase D lazy CAM fetch: one /predict-cam-ensemble call
+  // serves the whole grid, cached here. The grid always shows attention
+  // thumbnails, so the fetch is kicked off on init (rather than on expand).
   CamEnsembleResponse? _cams;
   bool _loading = false;
   String? _error;
   bool _fetchStarted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ensureCams();
+  }
 
   Future<void> _ensureCams() async {
     if (!widget.camAvailable || _fetchStarted) return;
@@ -951,7 +1011,7 @@ class _ModelBreakdownCardState extends State<_ModelBreakdownCard> {
       setState(() {
         _error = error.toString().replaceFirst('Exception: ', '');
         _loading = false;
-        _fetchStarted = false; // allow a retry on the next expand
+        _fetchStarted = false;
       });
     }
   }
@@ -960,416 +1020,502 @@ class _ModelBreakdownCardState extends State<_ModelBreakdownCard> {
   Widget build(BuildContext context) {
     final sorted = [...widget.outputs]
       ..sort((a, b) => b.weight.compareTo(a.weight));
-    return StandardCard(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.lg,
-        AppSpacing.lg,
-        AppSpacing.sm,
-      ),
+    return _DSCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionHeader(
-            label: 'Model Outputs',
-            icon: Icons.hub_outlined,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const _LabelUp('PER-MODEL ATTENTION'),
+              Text(widget.camAvailable ? 'Tap to expand' : 'Attention in API mode',
+                  style: DSText.caption),
+            ],
           ),
-          const SizedBox(height: AppSpacing.sm),
-          for (var i = 0; i < sorted.length; i++) ...[
-            if (i > 0) const Divider(height: 1),
-            _ModelRow(
-              output: sorted[i],
-              agrees: sorted[i].predictedClass == widget.ensembleTopClass,
-              camAvailable: widget.camAvailable,
-              onExpand: _ensureCams,
-              camLoading: _loading,
-              camError: _error,
-              modelCam: _cams?.camFor(sorted[i].model),
-            ),
-          ],
+          const SizedBox(height: 14),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 0.82,
+            children: [
+              for (final m in sorted)
+                _ModelTile(
+                  output: m,
+                  image: widget.selectedImage,
+                  cam: _cams?.camFor(m.model),
+                  loading: _loading,
+                  error: _error,
+                  camAvailable: widget.camAvailable,
+                ),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
-class _ModelRow extends StatefulWidget {
-  const _ModelRow({
+class _ModelTile extends StatelessWidget {
+  const _ModelTile({
     required this.output,
-    required this.agrees,
-    this.camAvailable = false,
-    this.onExpand,
-    this.camLoading = false,
-    this.camError,
-    this.modelCam,
+    required this.image,
+    required this.cam,
+    required this.loading,
+    required this.error,
+    required this.camAvailable,
   });
 
   final ModelPrediction output;
-  final bool agrees;
-  // Per-model Grad-CAM (ensemble API mode only). When [camAvailable], the first
-  // expansion triggers [onExpand]; the resulting [modelCam]/[camLoading]/
-  // [camError] are supplied by the parent breakdown card (shared fetch).
+  final SelectedImage image;
+  final ModelCam? cam;
+  final bool loading;
+  final String? error;
   final bool camAvailable;
-  final VoidCallback? onExpand;
-  final bool camLoading;
-  final String? camError;
-  final ModelCam? modelCam;
-
-  @override
-  State<_ModelRow> createState() => _ModelRowState();
-}
-
-class _ModelRowState extends State<_ModelRow> {
-  bool _expanded = false;
-
-  void _toggle() {
-    final willExpand = !_expanded;
-    setState(() => _expanded = willExpand);
-    if (willExpand && widget.camAvailable) {
-      widget.onExpand?.call();
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    final risk = riskOf(widget.output.predictedClass);
-    final p = riskPalette(risk);
-    final conf = widget.output.confidence.clamp(0.0, 1.0).toDouble();
-
-    return Column(
-      children: [
-        InkWell(
-          onTap: _toggle,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-            child: Column(
-              children: [
-                Row(
+    final heatmap = cam?.heatmapBytes;
+    return Material(
+      color: DSColors.neutral0,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => showDialog<void>(
+          context: context,
+          barrierColor: const Color(0xBF141412),
+          builder: (_) => _Lightbox(output: output, image: image, heatmap: heatmap),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            border: Border.all(color: DSColors.neutral100, width: DSBorders.width),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(output.model,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: DSColors.neutral900,
+                        )),
+                  ),
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: DSColors.neutral100,
+                      borderRadius: BorderRadius.circular(DSRadius.pill),
+                    ),
+                    child: Text('${(output.weight * 100).round()}%',
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w500,
+                          color: DSColors.neutral500,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        )),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text.rich(
+                TextSpan(children: [
+                  TextSpan(
+                    text: output.predictedClass,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: DSColors.primary700,
+                    ),
+                  ),
+                  TextSpan(
+                    text: ' · ${(output.confidence * 100).toStringAsFixed(1)}%',
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 11,
+                      color: DSColors.neutral500,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: Row(
                   children: [
+                    Expanded(child: _Thumb(label: 'Original', bytes: image.bytes)),
+                    const SizedBox(width: 6),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  widget.output.model,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.brandAccentSoft,
-                                  borderRadius:
-                                      BorderRadius.circular(AppRadius.sm),
-                                ),
-                                child: Text(
-                                  '${(widget.output.weight * 100).round()}%',
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.brandPrimaryDark,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                widget.agrees
-                                    ? Icons.check_circle_outline
-                                    : Icons.alt_route_outlined,
-                                size: 12,
-                                color: widget.agrees
-                                    ? AppColors.lowerAccent
-                                    : AppColors.indetAccent,
-                              ),
-                              const SizedBox(width: 4),
-                              Flexible(
-                                child: Text(
-                                  widget.output.displayLabel,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: p.accent,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                      child: _Thumb(
+                        label: 'Attention',
+                        bytes: heatmap,
+                        loading: camAvailable && loading && heatmap == null,
+                        unavailable: !camAvailable || (heatmap == null && !loading),
                       ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text(
-                      '${(conf * 100).toStringAsFixed(1)}%',
-                      style: AppText.mono.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13.5,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      _expanded
-                          ? Icons.keyboard_arrow_up_rounded
-                          : Icons.keyboard_arrow_down_rounded,
-                      size: 18,
-                      color: AppColors.textTertiary,
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  child: LinearProgressIndicator(
-                    minHeight: 4,
-                    value: conf,
-                    backgroundColor: AppColors.border,
-                    valueColor: AlwaysStoppedAnimation<Color>(p.accent),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-        AnimatedCrossFade(
-          duration: const Duration(milliseconds: 180),
-          crossFadeState:
-              _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-          firstChild: const SizedBox.shrink(),
-          secondChild: Padding(
-            padding: const EdgeInsets.only(
-              bottom: AppSpacing.md,
-              top: 2,
-            ),
-            child: Column(
-              children: [
-                for (var i = 0; i < widget.output.topCandidates.length; i++)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Row(
-                      children: [
-                        SizedBox(
+      ),
+    );
+  }
+}
+
+class _Thumb extends StatelessWidget {
+  const _Thumb({
+    required this.label,
+    required this.bytes,
+    this.loading = false,
+    this.unavailable = false,
+    this.radius = 8,
+  });
+
+  final String label;
+  final Uint8List? bytes;
+  final bool loading;
+  final bool unavailable;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (bytes != null)
+              Image.memory(bytes!, fit: BoxFit.cover, gaplessPlayback: true)
+            else
+              ColoredBox(
+                color: DSColors.neutral100,
+                child: Center(
+                  child: loading
+                      ? const SizedBox(
                           width: 16,
-                          child: Text(
-                            '${i + 1}.',
-                            style: AppText.captionMuted,
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            '${widget.output.topCandidates[i].className.toUpperCase()} — ${widget.output.topCandidates[i].displayLabel}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppText.caption,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: DSColors.primary500),
+                        )
+                      : (unavailable
+                          ? const Icon(Icons.image_not_supported_outlined,
+                              size: 16, color: DSColors.neutral300)
+                          : const SizedBox.shrink()),
+                ),
+              ),
+            Positioned(
+              left: 6,
+              bottom: 6,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0x8C141412),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(label,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                      color: DSColors.neutral0,
+                    )),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Lightbox extends StatelessWidget {
+  const _Lightbox({required this.output, required this.image, required this.heatmap});
+
+  final ModelPrediction output;
+  final SelectedImage image;
+  final Uint8List? heatmap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: DSColors.neutral0,
+      insetPadding: const EdgeInsets.all(24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${output.model} · ${(output.weight * 100).round()}%',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: DSColors.neutral900,
+                            )),
+                        const SizedBox(height: 2),
                         Text(
-                          '${(widget.output.topCandidates[i].confidence * 100).toStringAsFixed(1)}%',
-                          style: AppText.mono.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textSecondary,
+                          '${output.predictedClass} · ${(output.confidence * 100).toStringAsFixed(1)}%',
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            color: DSColors.neutral500,
+                            fontFeatures: [FontFeature.tabularFigures()],
                           ),
                         ),
                       ],
                     ),
                   ),
-                if (widget.camAvailable) _buildCam(),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Per-model Grad-CAM block shown in the expanded row (ensemble API mode).
-  /// Data comes from the parent breakdown card's shared, cached fetch.
-  Widget _buildCam() {
-    final cam = widget.modelCam;
-    Widget content;
-    if (cam != null && cam.hasHeatmap) {
-      content = Column(
-        children: [
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 220),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                child: AspectRatio(
-                  aspectRatio: 1.0,
-                  child: Image.memory(
-                    cam.heatmapBytes!,
-                    fit: BoxFit.cover,
-                    gaplessPlayback: true,
+                  _IconBtn(
+                    icon: Icons.close,
+                    onTap: () => Navigator.of(context).pop(),
                   ),
-                ),
+                ],
               ),
-            ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(child: _Thumb(label: 'Original', bytes: image.bytes, radius: 14)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _Thumb(
+                      label: 'Attention',
+                      bytes: heatmap,
+                      unavailable: heatmap == null,
+                      radius: 14,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Grad-CAM on the final conv layer · calibrated softmax.',
+                style: DSText.caption,
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Attention: ${widget.output.model}',
-            style: AppText.captionMuted,
-          ),
-        ],
-      );
-    } else if (cam != null || widget.camError != null) {
-      // Per-model server-side CAM failure, or whole-request fetch failure.
-      content = const _CamUnavailable();
-    } else if (widget.camLoading) {
-      content = const Padding(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            SizedBox(width: AppSpacing.sm),
-            Text('Loading attention…', style: AppText.captionMuted),
-          ],
         ),
-      );
-    } else {
-      content = const SizedBox.shrink();
-    }
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.sm),
-      child: content,
-    );
-  }
-}
-
-class _CamUnavailable extends StatelessWidget {
-  const _CamUnavailable();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.image_not_supported_outlined,
-            size: 13,
-            color: AppColors.textTertiary,
-          ),
-          SizedBox(width: 5),
-          Text('Heatmap unavailable', style: AppText.captionMuted),
-        ],
       ),
     );
   }
 }
 
-// ── Metadata footer ───────────────────────────────────────────────────────────
+// ── Footnote ──────────────────────────────────────────────────────────────────
 
-class _MetadataFooter extends StatelessWidget {
-  const _MetadataFooter({
-    required this.inferenceMs,
-    required this.version,
-    required this.requestId,
-    required this.isMock,
-  });
-
-  final double? inferenceMs;
-  final String version;
-  final String? requestId;
-  final bool isMock;
-
-  @override
-  Widget build(BuildContext context) {
-    final shortId = requestId == null
-        ? null
-        : (requestId!.length > 8 ? requestId!.substring(0, 8) : requestId!);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: Wrap(
-        spacing: 14,
-        runSpacing: 6,
-        children: [
-          if (inferenceMs != null)
-            MetaChip(
-              icon: Icons.timer_outlined,
-              label: '${inferenceMs!.toStringAsFixed(0)} ms',
-              mono: true,
-            ),
-          MetaChip(
-            icon: Icons.label_outline,
-            label: version,
-            mono: true,
-          ),
-          if (shortId != null)
-            MetaChip(
-              icon: Icons.fingerprint_outlined,
-              label: shortId,
-              mono: true,
-            ),
-          if (isMock)
-            const MetaChip(
-              icon: Icons.science_outlined,
-              label: 'mock',
-              mono: true,
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Disclaimer (within scroll) ────────────────────────────────────────────────
-
-class _DisclaimerCard extends StatelessWidget {
-  const _DisclaimerCard({required this.text});
+class _Footnote extends StatelessWidget {
+  const _Footnote(this.text);
 
   final String text;
 
   @override
   Widget build(BuildContext context) {
-    return StatusCard(
-      background: AppColors.safetyBg,
-      accent: AppColors.safetyAccent,
-      border: AppColors.safetyBorder,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(
-            Icons.shield_outlined,
-            size: 16,
-            color: AppColors.safetyAccent,
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 11.5,
+          height: 1.55,
+          color: DSColors.neutral500,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Shared DS primitives (inlined per self-contained screen) ──────────────────
+
+class _DSCard extends StatelessWidget {
+  const _DSCard({required this.child, this.padding});
+
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: padding ?? const EdgeInsets.all(DSSpacing.cardPad),
+      decoration: BoxDecoration(
+        color: DSColors.neutral0,
+        border: Border.all(color: DSColors.neutral100, width: DSBorders.width),
+        borderRadius: BorderRadius.circular(DSRadius.card),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _LabelUp extends StatelessWidget {
+  const _LabelUp(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(text, style: DSText.labelUp);
+}
+
+class _ScreenTop extends StatelessWidget {
+  const _ScreenTop({required this.title, this.onBack, this.trailing});
+
+  final String title;
+  final VoidCallback? onBack;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _IconBtn(icon: Icons.chevron_left, onTap: onBack),
+        Expanded(
+          child: Center(
             child: Text(
-              text,
+              title,
               style: const TextStyle(
-                color: AppColors.safetyText,
-                fontSize: 12.5,
-                height: 1.45,
+                fontFamily: 'Inter',
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.2,
+                color: DSColors.neutral900,
               ),
             ),
           ),
-        ],
+        ),
+        trailing ?? const SizedBox(width: 36, height: 36),
+      ],
+    );
+  }
+}
+
+class _IconBtn extends StatelessWidget {
+  const _IconBtn({required this.icon, this.onTap});
+
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: DSColors.neutral0,
+      shape: const CircleBorder(
+        side: BorderSide(color: DSColors.neutral100, width: DSBorders.width),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: Icon(icon, size: 18, color: DSColors.neutral700),
+        ),
+      ),
+    );
+  }
+}
+
+class _DSButton extends StatelessWidget {
+  const _DSButton({
+    required this.label,
+    required this.primary,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool primary;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = primary ? DSColors.neutral0 : DSColors.neutral900;
+    return Material(
+      color: primary ? DSColors.primary500 : DSColors.neutral0,
+      borderRadius: BorderRadius.circular(DSRadius.btn),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(DSRadius.btn),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(DSRadius.btn),
+            border: primary
+                ? null
+                : Border.all(color: DSColors.neutral300, width: DSBorders.width),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: fg,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DisclaimerRibbon extends StatelessWidget {
+  const _DisclaimerRibbon({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: DSColors.neutral50,
+        border: Border.all(color: DSColors.neutral100, width: DSBorders.width),
+        borderRadius: BorderRadius.circular(DSRadius.btn),
+      ),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 11,
+          fontWeight: FontWeight.w400,
+          height: 1.5,
+          color: DSColors.neutral500,
+        ),
       ),
     );
   }

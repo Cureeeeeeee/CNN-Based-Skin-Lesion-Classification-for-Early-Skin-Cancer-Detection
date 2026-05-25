@@ -5,12 +5,14 @@ import '../models/ensemble_result.dart';
 import '../models/prediction_result.dart';
 import '../models/selected_image.dart';
 import '../services/prediction_api.dart';
-import '../theme/tokens.dart';
-import '../widgets/cards.dart';
-import '../widgets/disclaimer_ribbon.dart';
+import '../theme/design_tokens.dart';
 import 'result_screen.dart';
 import 'safety_about_screen.dart';
 
+/// Redesigned analysis-setup screen — mockup Screen 2 (data-screen-key="classify").
+/// Visual-only rewrite: all state (URL, mock mode, analysis mode, loading,
+/// error), the `_analyze()` API call, and navigation to ResultScreen are
+/// preserved exactly from the prior implementation.
 class ClassificationScreen extends StatefulWidget {
   const ClassificationScreen({super.key, required this.selectedImage});
 
@@ -98,261 +100,303 @@ class _ClassificationScreenState extends State<ClassificationScreen> {
     );
   }
 
+  String get _connectionSummary {
+    final raw = _apiUrlController.text.replaceFirst(RegExp(r'^https?://'), '');
+    return '$raw · Mock mode ${_mockMode ? 'on' : 'off'}';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final kb = (widget.selectedImage.bytes.lengthInBytes / 1024).round();
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Analysis Setup'),
-        actions: [
-          IconButton(
-            tooltip: 'About this system',
-            icon: const Icon(Icons.info_outline),
-            onPressed: _openAbout,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _ContextStrip(
-            image: widget.selectedImage,
-            onChange: _isLoading ? null : () => Navigator.of(context).pop(),
-          ),
-          Expanded(
-            child: AnimatedOpacity(
-              opacity: _isLoading ? 0.5 : 1,
-              duration: const Duration(milliseconds: 150),
-              child: IgnorePointer(
-                ignoring: _isLoading,
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    AppSpacing.lg,
-                    AppSpacing.lg,
-                    AppSpacing.xxl,
+      backgroundColor: DSColors.neutral0,
+      body: SafeArea(
+        child: AnimatedOpacity(
+          opacity: _isLoading ? 0.6 : 1,
+          duration: const Duration(milliseconds: 150),
+          child: IgnorePointer(
+            ignoring: _isLoading,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(
+                DSSpacing.pageHPadding,
+                DSSpacing.pageHPadding,
+                DSSpacing.pageHPadding,
+                DSSpacing.s5,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ScreenTop(
+                    title: 'Analysis Setup',
+                    onBack: () => Navigator.of(context).pop(),
+                    trailing: _IconBtn(
+                      icon: Icons.info_outline,
+                      onTap: _openAbout,
+                    ),
                   ),
-                  children: [
-                    const _ImageQualityCard(),
-                    const SizedBox(height: AppSpacing.md),
-                    _ModeCard(
-                      ensembleMode: _ensembleMode,
-                      onChanged: (v) => setState(() {
-                        _ensembleMode = v;
-                        _error = null;
-                      }),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    _ConnectionCard(
-                      controller: _apiUrlController,
-                      mockMode: _mockMode,
-                      expanded: _connectionExpanded,
-                      onToggleExpand: () => setState(
-                          () => _connectionExpanded = !_connectionExpanded),
-                      onMockChanged: (v) => setState(() {
-                        _mockMode = v;
-                        _error = null;
-                      }),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      _ErrorCard(message: _error!),
-                    ],
-                    const SizedBox(height: AppSpacing.lg),
-                    FilledButton(
-                      onPressed: _isLoading ? null : _analyze,
-                      child: _isLoading
-                          ? const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.2,
-                                    color: AppColors.textOnBrand,
-                                  ),
-                                ),
-                                SizedBox(width: AppSpacing.sm),
-                                Text('Analysing…'),
-                              ],
-                            )
-                          : Text(
-                              _ensembleMode
-                                  ? 'Run 4-Model Ensemble Analysis'
-                                  : 'Run Single-Model Analysis',
+                  const SizedBox(height: DSSpacing.s4),
+                  // Card 1 — selected image preview
+                  _DSCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _LabelUp('SELECTED IMAGE'),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.memory(
+                                widget.selectedImage.bytes,
+                                width: 56,
+                                height: 56,
+                                fit: BoxFit.cover,
+                              ),
                             ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.selectedImage.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: DSColors.neutral900,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '$kb KB · Just now',
+                                    style: DSText.caption,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              style: TextButton.styleFrom(
+                                foregroundColor: DSColors.primary700,
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                minimumSize: const Size(0, 36),
+                              ),
+                              child: const Text(
+                                'Change',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
+                  ),
+                  const SizedBox(height: DSSpacing.cardGap),
+                  // Card 2 — image quality guidance
+                  _DSCard(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          alignment: Alignment.center,
+                          decoration: const BoxDecoration(
+                            color: DSColors.info50,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.info_outline,
+                              size: 14, color: DSColors.info500),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _LabelUp('IMAGE QUALITY'),
+                              SizedBox(height: 6),
+                              Text(
+                                'Center the lesion, fill ~60% of the frame, '
+                                'avoid glare and hair. Dermatoscopic crops give '
+                                'the most reliable predictions.',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 13.5,
+                                  height: 1.55,
+                                  color: DSColors.neutral700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: DSSpacing.cardGap),
+                  // Card 3 — analysis mode
+                  _DSCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _LabelUp('ANALYSIS MODE'),
+                            Text('Choose one', style: DSText.caption),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        _SegmentedMode(
+                          ensembleMode: _ensembleMode,
+                          onChanged: (v) => setState(() {
+                            _ensembleMode = v;
+                            _error = null;
+                          }),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: DSColors.neutral50,
+                            borderRadius: BorderRadius.circular(DSRadius.input),
+                          ),
+                          child: Text(
+                            _ensembleMode
+                                ? 'Runs ResNet50 v1 · DenseNet121 · '
+                                    'EfficientNet-B0 · MobileNetV3 Small in '
+                                    'parallel, weighted 38 / 37 / 20 / 5%. '
+                                    'Slower but provides agreement and per-model '
+                                    'attention.'
+                                : 'Uses ResNet50 v2 (focal loss + balanced '
+                                    'sampler). Test mel recall 73.4%, F1 70.08%. '
+                                    'Faster, no inter-model agreement signal.',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12.5,
+                              height: 1.55,
+                              color: DSColors.neutral700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: DSSpacing.cardGap),
+                  // Card 4 — backend connection (collapsible)
+                  _ConnectionCard(
+                    controller: _apiUrlController,
+                    mockMode: _mockMode,
+                    expanded: _connectionExpanded,
+                    summary: _connectionSummary,
+                    onToggleExpand: () => setState(
+                        () => _connectionExpanded = !_connectionExpanded),
+                    onMockChanged: (v) => setState(() {
+                      _mockMode = v;
+                      _error = null;
+                    }),
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: DSSpacing.cardGap),
+                    _ErrorCard(message: _error!),
                   ],
-                ),
+                  const SizedBox(height: DSSpacing.s5),
+                  // Run Analysis CTA
+                  _DSButton(
+                    label: _isLoading ? 'Analysing…' : 'Run Analysis',
+                    primary: true,
+                    trailingIcon: _isLoading ? null : Icons.chevron_right,
+                    loading: _isLoading,
+                    onTap: _isLoading ? null : _analyze,
+                  ),
+                  const SizedBox(height: DSSpacing.s4),
+                  const _DisclaimerRibbon(
+                    text: 'For educational use only. Not a medical device.',
+                  ),
+                ],
               ),
             ),
           ),
-          if (_isLoading) _LoadingIndicator(ensembleMode: _ensembleMode),
-        ],
-      ),
-      bottomNavigationBar: const DisclaimerRibbon(),
-    );
-  }
-}
-
-// ── Context strip ─────────────────────────────────────────────────────────────
-
-class _ContextStrip extends StatelessWidget {
-  const _ContextStrip({required this.image, required this.onChange});
-
-  final SelectedImage image;
-  final VoidCallback? onChange;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceMuted,
-        border: Border(
-          bottom: BorderSide(color: AppColors.border),
         ),
       ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.sm,
-      ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-            child: Image.memory(
-              image.bytes,
-              width: 36,
-              height: 36,
-              fit: BoxFit.cover,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Selected image',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textTertiary,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-                Text(
-                  image.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppText.mono.copyWith(color: AppColors.textSecondary),
-                ),
-              ],
-            ),
-          ),
-          TextButton(
-            onPressed: onChange,
-            child: const Text('Change'),
-          ),
-        ],
-      ),
     );
   }
 }
 
-// ── Image quality card ────────────────────────────────────────────────────────
+// ── Segmented mode control ────────────────────────────────────────────────────
 
-class _ImageQualityCard extends StatelessWidget {
-  const _ImageQualityCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return const StandardCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SectionHeader(
-            label: 'Image Quality Guidance',
-            icon: Icons.info_outline,
-          ),
-          SizedBox(height: AppSpacing.sm),
-          Text(
-            'For best results: focus on a single lesion that fills the frame, '
-            'use even lighting, and avoid hair or markers obscuring the area. '
-            'Phone-camera images may produce less reliable predictions than '
-            'dermoscopic photographs.',
-            style: AppText.bodyMuted,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Mode card ─────────────────────────────────────────────────────────────────
-
-class _ModeCard extends StatelessWidget {
-  const _ModeCard({required this.ensembleMode, required this.onChanged});
+class _SegmentedMode extends StatelessWidget {
+  const _SegmentedMode({required this.ensembleMode, required this.onChanged});
 
   final bool ensembleMode;
   final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return StandardCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: DSColors.neutral100,
+        borderRadius: BorderRadius.circular(DSRadius.input),
+      ),
+      child: Row(
         children: [
-          const SectionHeader(
-            label: 'Analysis Mode',
-            icon: Icons.tune_outlined,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          SizedBox(
-            width: double.infinity,
-            child: SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment<bool>(
-                  value: false,
-                  label: Text('Single Model'),
-                  icon: Icon(Icons.memory_outlined, size: 16),
-                ),
-                ButtonSegment<bool>(
-                  value: true,
-                  label: Text('4-Model Ensemble'),
-                  icon: Icon(Icons.account_tree_outlined, size: 16),
-                ),
-              ],
-              selected: {ensembleMode},
-              showSelectedIcon: false,
-              onSelectionChanged: (s) => onChanged(s.first),
+          _seg('Single Model', selected: !ensembleMode, onTap: () => onChanged(false)),
+          _seg('4-Model Ensemble', selected: ensembleMode, onTap: () => onChanged(true)),
+        ],
+      ),
+    );
+  }
+
+  Widget _seg(String label, {required bool selected, required VoidCallback onTap}) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: selected ? DSColors.neutral0 : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected ? DSColors.neutral100 : Colors.transparent,
+              width: DSBorders.width,
             ),
           ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            ensembleMode
-                ? 'Runs ResNet50, DenseNet121, EfficientNet-B0 and MobileNetV3 '
-                    'Small, then combines their outputs by weighted average. '
-                    'Provides a model-agreement signal for additional safety '
-                    'context.'
-                : 'Uses ResNet50 only (test accuracy 80.2%, macro F1 69.0%). '
-                    'Faster, but no agreement signal.',
-            style: AppText.caption,
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: selected ? DSColors.neutral900 : DSColors.neutral500,
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-// ── Connection card (collapsible) ─────────────────────────────────────────────
+// ── Backend connection (collapsible) ──────────────────────────────────────────
 
 class _ConnectionCard extends StatelessWidget {
   const _ConnectionCard({
     required this.controller,
     required this.mockMode,
     required this.expanded,
+    required this.summary,
     required this.onToggleExpand,
     required this.onMockChanged,
   });
@@ -360,127 +404,129 @@ class _ConnectionCard extends StatelessWidget {
   final TextEditingController controller;
   final bool mockMode;
   final bool expanded;
+  final String summary;
   final VoidCallback onToggleExpand;
   final ValueChanged<bool> onMockChanged;
 
   @override
   Widget build(BuildContext context) {
-    return StandardCard(
-      padding: EdgeInsets.zero,
+    return _DSCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          InkWell(
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: onToggleExpand,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.md,
-                AppSpacing.md,
-                AppSpacing.md,
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.link_outlined,
-                    size: 18,
-                    color: AppColors.textSecondary,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _LabelUp('BACKEND CONNECTION'),
+                      const SizedBox(height: 6),
+                      Text(
+                        summary,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 13,
+                          color: DSColors.neutral700,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: AppSpacing.sm),
-                  const Expanded(
-                    child: Text(
-                      'Backend Connection',
-                      style: AppText.subtitle,
-                    ),
-                  ),
-                  _ModeBadge(mockMode: mockMode),
-                  const SizedBox(width: 4),
-                  Icon(
-                    expanded
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                    color: AppColors.textTertiary,
-                  ),
-                ],
-              ),
+                ),
+                AnimatedRotation(
+                  turns: expanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 180),
+                  child: const Icon(Icons.keyboard_arrow_down,
+                      size: 20, color: DSColors.neutral500),
+                ),
+              ],
             ),
           ),
-          if (expanded) ...[
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.md,
-                AppSpacing.lg,
-                AppSpacing.lg,
-              ),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 180),
+            crossFadeState:
+                expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            firstChild: const SizedBox(width: double.infinity),
+            secondChild: Padding(
+              padding: const EdgeInsets.only(top: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const Text('BACKEND URL',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.6,
+                        color: DSColors.neutral500,
+                      )),
+                  const SizedBox(height: 6),
                   TextField(
                     controller: controller,
                     enabled: !mockMode,
-                    decoration: const InputDecoration(
-                      labelText: 'FastAPI base URL',
-                      helperText:
-                          'Web: 127.0.0.1 · Emulator: 10.0.2.2 · Phone: PC LAN IP',
-                      prefixIcon: Icon(Icons.dns_outlined, size: 18),
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      color: DSColors.neutral900,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                    ),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      filled: true,
+                      fillColor: DSColors.neutral50,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 11),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(DSRadius.input),
+                        borderSide: const BorderSide(color: DSColors.neutral100),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(DSRadius.input),
+                        borderSide: const BorderSide(color: DSColors.neutral100),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(DSRadius.input),
+                        borderSide: const BorderSide(color: DSColors.primary500),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.md),
+                  const SizedBox(height: 16),
                   Row(
                     children: [
                       const Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Mock mode', style: AppText.subtitle),
+                            Text('Mock mode',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: DSColors.neutral900,
+                                )),
                             SizedBox(height: 2),
-                            Text(
-                              'Returns deterministic mock data without '
-                              'contacting the backend.',
-                              style: AppText.captionMuted,
-                            ),
+                            Text('Return canned predictions for UI testing.',
+                                style: DSText.caption),
                           ],
                         ),
                       ),
-                      Switch(value: mockMode, onChanged: onMockChanged),
+                      Switch(
+                        value: mockMode,
+                        onChanged: onMockChanged,
+                        activeThumbColor: DSColors.neutral0,
+                        activeTrackColor: DSColors.primary500,
+                      ),
                     ],
                   ),
                 ],
               ),
             ),
-          ],
+          ),
         ],
-      ),
-    );
-  }
-}
-
-class _ModeBadge extends StatelessWidget {
-  const _ModeBadge({required this.mockMode});
-
-  final bool mockMode;
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = mockMode ? AppColors.indetBadgeBg : AppColors.brandAccentSoft;
-    final fg = mockMode ? AppColors.indetText : AppColors.brandPrimaryDark;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-      ),
-      child: Text(
-        mockMode ? 'MOCK' : 'API',
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-          color: fg,
-          letterSpacing: 0.6,
-        ),
       ),
     );
   }
@@ -495,40 +541,38 @@ class _ErrorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StatusCard(
-      background: AppColors.reviewBg,
-      accent: AppColors.reviewAccent,
-      border: AppColors.reviewBorder,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(DSSpacing.s4),
+      decoration: BoxDecoration(
+        color: DSColors.stateUrgent50,
+        border: Border.all(color: DSColors.stateUrgent500, width: DSBorders.width),
+        borderRadius: BorderRadius.circular(DSRadius.card),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.error_outline,
-            size: 18,
-            color: AppColors.reviewAccent,
-          ),
-          const SizedBox(width: AppSpacing.sm),
+          const Icon(Icons.error_outline, size: 18, color: DSColors.stateUrgent500),
+          const SizedBox(width: DSSpacing.s2),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Analysis failed',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.reviewText,
-                    fontSize: 14,
-                  ),
-                ),
+                const Text('Analysis failed',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: DSColors.stateUrgent900,
+                    )),
                 const SizedBox(height: 2),
-                Text(
-                  message,
-                  style: const TextStyle(
-                    color: AppColors.reviewText,
-                    fontSize: 12.5,
-                    height: 1.4,
-                  ),
-                ),
+                Text(message,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12.5,
+                      height: 1.4,
+                      color: DSColors.stateUrgent900,
+                    )),
               ],
             ),
           ),
@@ -538,45 +582,191 @@ class _ErrorCard extends StatelessWidget {
   }
 }
 
-// ── Loading indicator ─────────────────────────────────────────────────────────
+// ── Shared DS primitives (inlined per self-contained screen) ──────────────────
 
-class _LoadingIndicator extends StatelessWidget {
-  const _LoadingIndicator({required this.ensembleMode});
+class _DSCard extends StatelessWidget {
+  const _DSCard({required this.child});
 
-  final bool ensembleMode;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceMuted,
-        border: Border(top: BorderSide(color: AppColors.border)),
+      padding: const EdgeInsets.all(DSSpacing.cardPad),
+      decoration: BoxDecoration(
+        color: DSColors.neutral0,
+        border: Border.all(color: DSColors.neutral100, width: DSBorders.width),
+        borderRadius: BorderRadius.circular(DSRadius.card),
       ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.md,
-      ),
-      child: Row(
-        children: [
-          const SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2.2),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
+      child: child,
+    );
+  }
+}
+
+class _LabelUp extends StatelessWidget {
+  const _LabelUp(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(text, style: DSText.labelUp);
+}
+
+class _ScreenTop extends StatelessWidget {
+  const _ScreenTop({required this.title, this.onBack, this.trailing});
+
+  final String title;
+  final VoidCallback? onBack;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _IconBtn(icon: Icons.chevron_left, onTap: onBack),
+        Expanded(
+          child: Center(
             child: Text(
-              ensembleMode
-                  ? 'Running 4 models in sequence…'
-                  : 'Running ResNet50…',
-              style: AppText.caption.copyWith(
+              title,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 22,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
+                letterSpacing: -0.2,
+                color: DSColors.neutral900,
               ),
             ),
           ),
-        ],
+        ),
+        trailing ?? const SizedBox(width: 36, height: 36),
+      ],
+    );
+  }
+}
+
+class _IconBtn extends StatelessWidget {
+  const _IconBtn({required this.icon, this.onTap});
+
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: DSColors.neutral0,
+      shape: const CircleBorder(
+        side: BorderSide(color: DSColors.neutral100, width: DSBorders.width),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: Icon(icon, size: 18, color: DSColors.neutral700),
+        ),
+      ),
+    );
+  }
+}
+
+class _DSButton extends StatelessWidget {
+  const _DSButton({
+    required this.label,
+    required this.primary,
+    required this.onTap,
+    this.trailingIcon,
+    this.loading = false,
+  });
+
+  final String label;
+  final bool primary;
+  final VoidCallback? onTap;
+  final IconData? trailingIcon;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = primary ? DSColors.neutral0 : DSColors.neutral900;
+    return Material(
+      color: primary ? DSColors.primary500 : DSColors.neutral0,
+      borderRadius: BorderRadius.circular(DSRadius.btn),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(DSRadius.btn),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(DSRadius.btn),
+            border: primary
+                ? null
+                : Border.all(color: DSColors.neutral300, width: DSBorders.width),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (loading) ...[
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2.2, color: DSColors.neutral0),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: fg,
+                  ),
+                ),
+              ),
+              if (trailingIcon != null) ...[
+                const SizedBox(width: 8),
+                Icon(trailingIcon, size: 16, color: fg),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DisclaimerRibbon extends StatelessWidget {
+  const _DisclaimerRibbon({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: DSColors.neutral50,
+        border: Border.all(color: DSColors.neutral100, width: DSBorders.width),
+        borderRadius: BorderRadius.circular(DSRadius.btn),
+      ),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 11,
+          fontWeight: FontWeight.w400,
+          height: 1.5,
+          color: DSColors.neutral500,
+        ),
       ),
     );
   }
