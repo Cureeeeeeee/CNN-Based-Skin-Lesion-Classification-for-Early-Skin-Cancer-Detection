@@ -25,7 +25,7 @@ git checkout v2.1
 ## 2. Download released model weights (12 assets, ~318 MB)
 
 ```bash
-mkdir -p runs runs_v2
+mkdir -p runs/resnet50 runs/densenet121 runs/efficientnet_b0 runs/mobilenetv3_small_100 runs/resnet50_v1_backup runs/resnet50_v2
 gh release download v2.1 --dir _release_assets
 
 # Place each weights+calibration pair into its run directory:
@@ -39,8 +39,8 @@ mv _release_assets/mobilenetv3_small_100__best.pt runs/mobilenetv3_small_100/bes
 mv _release_assets/mobilenetv3_small_100__calibration.json runs/mobilenetv3_small_100/calibration.json
 mv _release_assets/resnet50_v1_backup__best.pt    runs/resnet50_v1_backup/best.pt
 mv _release_assets/resnet50_v1_backup__calibration.json runs/resnet50_v1_backup/calibration.json
-mv _release_assets/resnet50_v2__best.pt           runs_v2/resnet50_v2/best.pt
-mv _release_assets/resnet50_v2__calibration.json  runs_v2/resnet50_v2/calibration.json
+mv _release_assets/resnet50_v2__best.pt           runs/resnet50_v2/best.pt
+mv _release_assets/resnet50_v2__calibration.json  runs/resnet50_v2/calibration.json
 rmdir _release_assets
 ```
 
@@ -89,7 +89,7 @@ Reproduces the deployed single-model `/predict` checkpoint. Requires
 the HAM10000 dataset prepared at `data/processed/`.
 
 ```bash
-python -m skinlesion.train \
+python -m src.skinlesion.train \
     --config configs/ham10000_v2_focal_sampler.yaml \
     --model resnet50
 ```
@@ -106,7 +106,7 @@ Expected output metrics (on HAM10000 test split):
 ## 6. (Optional) Refit calibration
 
 ```bash
-python -m skinlesion.calibrate --model resnet50 --run-dir runs_v2/resnet50_v2
+python -m src.skinlesion.calibrate --model resnet50 --run-dir runs/resnet50_v2
 ```
 
 Writes `runs_v2/resnet50_v2/calibration.json` with the fitted scalar
@@ -115,8 +115,10 @@ temperature and before/after ECE on validation + test splits.
 ## 7. Run the test suite
 
 ```bash
-# Python smoke test
-pytest tests/
+# Python smoke tests
+python scripts/test_api_demo.py
+python scripts/test_api_cam_ensemble.py
+python scripts/test_cam_all_models.py
 
 # Flutter widget test
 cd mobile_app && flutter test
