@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:skin_lesion_mobile/main.dart';
 
 void main() {
-  testWidgets('home screen renders identity, scope, source controls',
+  testWidgets('home screen renders brand, welcome, and start CTA',
       (WidgetTester tester) async {
     await tester.binding.setSurfaceSize(const Size(430, 1400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -11,27 +11,25 @@ void main() {
     await tester.pumpWidget(const SkinLesionApp());
     await tester.pumpAndSettle();
 
-    // AppBar title
-    expect(find.text('Skin Lesion Analysis'), findsOneWidget);
+    // Brand identity (redesigned HomeScreen, Stage 1)
+    expect(find.text('DermaSense'), findsOneWidget);
+    expect(find.text('Academic'), findsOneWidget);
 
-    // System identity block
+    // Welcome value proposition
     expect(
-      find.text('Research-Grade Diagnostic-Support Prototype'),
+      find.text('AI-assisted skin lesion classification.'),
       findsOneWidget,
     );
 
-    // Image source card and its actions
-    expect(find.text('Load Lesion Image'), findsOneWidget);
-    expect(find.text('Camera'), findsOneWidget);
-    expect(find.text('Gallery'), findsOneWidget);
+    // Primary CTA + secondary action
+    expect(find.text('Start Analysis'), findsOneWidget);
+    expect(find.text('About & safety information'), findsOneWidget);
 
-    // Primary CTA (disabled until an image is selected, but text present)
-    expect(find.text('Continue to Analysis'), findsOneWidget);
-
-    // Persistent disclaimer ribbon
+    // Persistent educational-use disclaimer
     expect(
       find.text(
-        'Not a medical diagnosis. For research and educational use.',
+        'For educational use only. Not a medical device. Always consult a '
+        'qualified clinician for diagnosis and treatment.',
       ),
       findsOneWidget,
     );
